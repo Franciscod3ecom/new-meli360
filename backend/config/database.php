@@ -2,11 +2,13 @@
 // backend/config/database.php
 
 function getDatabaseConnection() {
-    $host = getenv('SUPABASE_HOST') ?: 'db.supabase.co';
-    $port = getenv('SUPABASE_PORT') ?: '5432';
-    $dbname = getenv('SUPABASE_DB_NAME') ?: 'postgres';
-    $user = getenv('SUPABASE_USER') ?: 'postgres';
-    $password = getenv('SUPABASE_PASSWORD') ?: 'password';
+    $config = require __DIR__ . '/config.php';
+
+    $host = $config['SUPABASE_HOST'];
+    $port = $config['SUPABASE_PORT'];
+    $dbname = $config['SUPABASE_DB_NAME'];
+    $user = $config['SUPABASE_USER'];
+    $password = $config['SUPABASE_PASSWORD'];
 
     $dsn = "pgsql:host=$host;port=$port;dbname=$dbname";
 

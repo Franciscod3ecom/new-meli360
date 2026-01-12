@@ -27,9 +27,21 @@ CREATE TABLE IF NOT EXISTS items (
 CREATE INDEX IF NOT EXISTS idx_items_account_id ON items(account_id);
 CREATE INDEX IF NOT EXISTS idx_items_ml_id ON items(ml_id);
 
+
 -- View to calculate days_without_sale dynamically
 CREATE OR REPLACE VIEW items_view AS
 SELECT 
     *,
     EXTRACT(DAY FROM (NOW() - COALESCE(last_sale_date, date_created))) AS days_without_sale
 FROM items;
+
+-- Create table accounts (For OAuth)
+CREATE TABLE IF NOT EXISTS accounts (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    ml_user_id VARCHAR(50) UNIQUE NOT NULL,
+    nickname VARCHAR(100),
+    access_token TEXT NOT NULL,
+    refresh_token TEXT NOT NULL,
+    expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
