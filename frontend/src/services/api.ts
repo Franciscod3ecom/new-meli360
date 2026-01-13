@@ -32,5 +32,15 @@ export const api = {
             console.error('Bulk update error:', error);
             throw error;
         }
+    },
+    checkAuth: async () => {
+        try {
+            const response = await fetch(`${BACKEND_URL}/api/me.php`);
+            if (!response.ok) return { authenticated: false };
+            return await response.json();
+        } catch (error) {
+            console.error('Auth check error:', error);
+            return { authenticated: false };
+        }
     }
 };

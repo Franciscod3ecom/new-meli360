@@ -87,7 +87,13 @@ try {
         ':expires_at' => $expires_at
     ]);
 
-    // 3. Redirect to Frontend
+    // 3. Start Session and Store Data
+    session_start();
+    $_SESSION['user_id'] = $user_id;
+    $_SESSION['nickname'] = $nickname;
+    $_SESSION['access_token'] = $access_token;
+
+    // 4. Redirect to Frontend
     $FRONTEND_URL = $config['FRONTEND_URL'] ?: 'http://localhost:5173';
     header("Location: $FRONTEND_URL?auth_success=true");
     exit;
