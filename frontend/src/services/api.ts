@@ -42,5 +42,32 @@ export const api = {
             console.error('Auth check error:', error);
             return { authenticated: false };
         }
+    },
+    getAccounts: async () => {
+        try {
+            const response = await fetch(`${BACKEND_URL}/api/accounts.php`);
+            if (!response.ok) throw new Error('Failed to fetch accounts');
+            return await response.json();
+        } catch (error) {
+            console.error('Get accounts error:', error);
+            throw error;
+        }
+    },
+    switchAccount: async (targetUserId: string) => {
+        try {
+            const response = await fetch(`${BACKEND_URL}/api/switch_account.php`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ target_user_id: targetUserId })
+            });
+            const data = await response.json();
+            if (!response.ok) throw new Error(data.error || 'Switch account failed');
+            return data;
+        } catch (error) {
+            console.error('Switch account error:', error);
+            throw error;
+        }
     }
 };
