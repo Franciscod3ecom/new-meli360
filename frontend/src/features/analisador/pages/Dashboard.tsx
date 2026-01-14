@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { supabase } from '../../../lib/supabase'
 import { api } from '../../../services/api'
+import { useAuth } from '../../../context/AuthContext'
 import { SyncStatus } from '../components/SyncStatus'
 import {
     Zap,
@@ -37,21 +38,24 @@ interface Item {
 }
 
 export default function Dashboard() {
+    const { user } = useAuth() // Get current user
     const [filter, setFilter] = useState<'all' | 'full' | 'stagnant' | 'no_sales'>('all')
     const [isSyncing, setIsSyncing] = useState(false)
     const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set())
     const [isBulkUpdating, setIsBulkUpdating] = useState(false)
 
-    // Query Data
+    // Query Data - NOW FILTERED BY ACCOUNT
     const { data: items, isLoading, error, refetch } = useQuery({
-        queryKey: ['items'],
+        queryKey: ['items', user?.id], // Add user.id to cache key
         queryFn: async () => {
-            // Fetching from 'items_view' if it exists, otherwise 'items' and calculate
+            if (!user?.id) return []
+            
             const { data, error } = await supabase
                 .from('items')
                 .select('*')
-                .order('last_sale_date', { ascending: true, nullsFirst: false }) // Sort by older sales first
-                .limit(200) // Increased limit
+                .eq('account_id', user.id) // FILTER BY ACCOUNT!
+                .order('last_sale_date', { ascending: true, nullsFirst: false })
+                .limit(200)
 
             if (error) throw error
 
@@ -68,7 +72,8 @@ export default function Dashboard() {
                 }
                 return { ...item, days_without_sale: days } as Item
             })
-        }
+        },
+        enabled: !!user?.id // Only run query if user is loaded
     })
 
     // Filter Logic

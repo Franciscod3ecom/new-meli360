@@ -1,16 +1,21 @@
 <?php
-// backend/cron/sync.php
+// backend/cron/sync.php - VERSÃO SIMPLIFICADA
+error_reporting(E_ALL);
+ini_set('display_errors', 1);
+header('Content-Type: text/plain; charset=utf-8');
+
+session_start();
+
 require_once __DIR__ . '/../config/database.php';
 
 // Configuration
-$MAX_EXECUTION_TIME = 50; // Seconds
+$MAX_EXECUTION_TIME = 50;
 $BATCH_SIZE = 50;
 $START_TIME = time();
 
-// --- Helper Functions ---
-
 function logMsg($msg) {
     echo "[" . date('Y-m-d H:i:s') . "] $msg\n";
+    flush();
 }
 
 function callMeliApi($endpoint, $token) {
@@ -18,205 +23,117 @@ function callMeliApi($endpoint, $token) {
     curl_setopt_array($curl, [
         CURLOPT_URL => "https://api.mercadolibre.com$endpoint",
         CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_ENCODING => "",
-        CURLOPT_MAXREDIRS => 10,
-        CURLOPT_TIMEOUT => 30, // Increased timeout
-        CURLOPT_FOLLOWLOCATION => true,
-        CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
-        CURLOPT_HTTPHEADER => [
-            "Authorization: Bearer $token"
-        ],
+        CURLOPT_TIMEOUT => 30,
+        CURLOPT_HTTPHEADER => ["Authorization: Bearer $token"],
     ]);
     
     $response = curl_exec($curl);
-    $err = curl_error($curl);
+    $httpCode = curl_getinfo($curl, CURLINFO_HTTP_CODE);
     curl_close($curl);
     
-    if ($err) {
-        logMsg("cURL Error: $err");
+    if ($httpCode !== 200) {
+        logMsg("API Error: HTTP $httpCode - $response");
         return null;
     }
+    
     return json_decode($response, true);
 }
 
-// --- Main Logic ---
+// --- MAIN LOGIC ---
 
-$pdo = getDatabaseConnection();
+logMsg("Starting sync...");
 
-// 1. Fetch Account & Valid Token
-// For simplicity, we get the first account. In multi-tenant, we'd loop through accounts.
-$stmt = $pdo->query("SELECT * FROM accounts LIMIT 1");
-$account = $stmt->fetch();
-
-if (!$account) {
-    die("No accounts found. Please login via /auth/login.php first.");
+// 1. Check Session
+if (!isset($_SESSION['user_id'])) {
+    die("ERROR: No active session. Please login first.\n");
 }
 
-// TODO: Implement Token Refresh if expired
-// if (strtotime($account['expires_at']) < time()) { ... refresh logic ... }
+$ml_user_id = $_SESSION['user_id'];
+logMsg("Session found: $ml_user_id");
 
-$access_token = $account['access_token'];
-$account_id = $account['id']; // UUID from our DB
-$ml_user_id = $account['ml_user_id'];
-
-// 2. Check Lock
-$lockFile = __DIR__ . '/sync.lock';
-if (file_exists($lockFile) && (time() - filemtime($lockFile) < 120)) { // 2 mins lock
-    die("Process already running.");
-}
-touch($lockFile);
-
+// 2. Get Account from DB
 try {
-    // START LOOP
-    while (time() - $START_TIME < $MAX_EXECUTION_TIME) {
-        
-        // --- PHASE 1: SCAN IDs (Discovery) ---
-        // Strategy: We check if we have roughly the correct number of items.
-        // If our DB count is significantly different from ML total, we trigger a scan.
-        
-        // 1. Get Total Items on ML
-        $searchData = callMeliApi("/users/$ml_user_id/items/search?status=active&limit=1", $access_token);
-        $totalRemote = $searchData['paging']['total'] ?? 0;
-        
-        $stmtCount = $pdo->query("SELECT COUNT(*) FROM items");
-        $totalLocal = $stmtCount->fetchColumn();
-        
-        // Determine if we need to scan (e.g., if local < remote)
-        // Note: Ideally use a flag or a separate cron for full scan, but here we do a 'light' check
-        if ($totalLocal < $totalRemote) {
-            logMsg("Scan needed: Local($totalLocal) vs Remote($totalRemote)");
-            
-            // Perform Scan using Search
-            // NOTE: 'search_type=scan' is deprecated in favor of scroll_id, but standard search with limit=50 and offset works for smaller catalogs.
-            // For robust large catalogs, use scroll_id. Implementing standard pagination for simplicity and broad compatibility here.
-            
-            $offset = 0;
-            while (true) {
-                if (time() - $START_TIME > ($MAX_EXECUTION_TIME - 10)) break; // Safety break
-                
-                $url = "/users/$ml_user_id/items/search?status=active&limit=50&offset=$offset";
-                $res = callMeliApi($url, $access_token);
-                
-                if (empty($res['results'])) break;
-                
-                $mappedIds = [];
-                foreach ($res['results'] as $ml_id) {
-                    $mappedIds[] = "('$ml_id', '$account_id')";
-                }
-                
-                if (!empty($mappedIds)) {
-                    $valuesSql = implode(',', $mappedIds);
-                    // Bulk Insert Ignore (Postgres approach: ON CONFLICT DO NOTHING)
-                    $sql = "INSERT INTO items (ml_id, account_id) VALUES $valuesSql ON CONFLICT (ml_id) DO NOTHING";
-                    $pdo->exec($sql);
-                    logMsg("Scanned/Inserted batch at offset $offset");
-                }
-                
-                $offset += 50;
-                if ($offset >= $res['paging']['total']) break;
-                
-                sleep(1);
-            }
-        }
-        
-        
-        // --- PHASE 2: PROCESSING (Enrichment) ---
-        // Get items that need update (oldest updated_at OR null fields)
-        // We prioritize items with null title (newly scanned)
-        $stmt = $pdo->prepare("SELECT ml_id FROM items WHERE title IS NULL OR updated_at < NOW() - INTERVAL '1 hour' ORDER BY title ASC NULLS FIRST, updated_at ASC LIMIT :limit");
-        $stmt->bindValue(':limit', $BATCH_SIZE, PDO::PARAM_INT);
-        $stmt->execute();
-        $idsToUpdate = $stmt->fetchAll(PDO::FETCH_COLUMN);
-
-        if (empty($idsToUpdate)) {
-            logMsg("All items up to date. Sleeping...");
-            sleep(5);
-            // Optionally break if really nothing to do
-            // break;
-            continue;
-        }
-
-        $idsString = implode(',', $idsToUpdate);
-        $itemsData = callMeliApi("/items?ids=$idsString", $access_token);
-
-        if (!$itemsData) {
-            logMsg("Failed to fetch items data details.");
-            break;
-        }
-
-        foreach ($itemsData as $itemWrapper) {
-            $code = $itemWrapper['code'];
-            $body = $itemWrapper['body'];
-            
-            if ($code != 200) continue;
-
-            $ml_id = $body['id'];
-            $title = $body['title'];
-            $price = $body['price'];
-            $permalink = $body['permalink'];
-            $thumbnail = $body['thumbnail'];
-            $status = $body['status'];
-            $date_created = $body['date_created'];
-            $sold_quantity = $body['sold_quantity'];
-            
-            // Extract 360 Logic
-            $shipping = $body['shipping'] ?? [];
-            $shipping_mode = $shipping['mode'] ?? 'not_specified';
-            $logistic_type = $shipping['logistic_type'] ?? 'not_specified';
-            $free_shipping = $shipping['free_shipping'] ?? false;
-            $tags = json_encode($body['tags'] ?? []);
-
-            // Analisador Logic (Last Sale)
-            $last_sale_date = null;
-            if ($sold_quantity > 0) {
-                // Try to get last sale date
-                $ordersData = callMeliApi("/orders/search?item=$ml_id&limit=1&sort=date_desc", $access_token);
-                if ($ordersData && !empty($ordersData['results'])) {
-                    $last_sale_date = $ordersData['results'][0]['date_closed'];
-                }
-            }
-            
-            // Upsert
-            $sql = "UPDATE items SET
-                        title = :title,
-                        price = :price,
-                        status = :status,
-                        permalink = :permalink,
-                        thumbnail = :thumbnail,
-                        date_created = :date_created,
-                        sold_quantity = :sold_quantity,
-                        shipping_mode = :shipping_mode,
-                        logistic_type = :logistic_type,
-                        free_shipping = :free_shipping,
-                        tags = :tags,
-                        last_sale_date = :last_sale_date,
-                        updated_at = NOW()
-                    WHERE ml_id = :ml_id";
-            
-            $update = $pdo->prepare($sql);
-            $update->execute([
-                ':ml_id' => $ml_id,
-                ':title' => $title,
-                ':price' => $price,
-                ':status' => $status,
-                ':permalink' => $permalink,
-                ':thumbnail' => $thumbnail,
-                ':date_created' => $date_created,
-                ':sold_quantity' => $sold_quantity,
-                ':shipping_mode' => $shipping_mode,
-                ':logistic_type' => $logistic_type,
-                ':free_shipping' => $free_shipping ? 'true' : 'false',
-                ':tags' => $tags,
-                ':last_sale_date' => $last_sale_date
-            ]);
-            
-            logMsg("Updated details for $ml_id");
-        }
-        
-        sleep(1);
+    $pdo = getDatabaseConnection();
+    $stmt = $pdo->prepare("SELECT * FROM accounts WHERE ml_user_id = :ml_user_id LIMIT 1");
+    $stmt->execute([':ml_user_id' => $ml_user_id]);
+    $account = $stmt->fetch(PDO::FETCH_ASSOC);
+    
+    if (!$account) {
+        die("ERROR: Account not found for ml_user_id: $ml_user_id\n");
     }
+    
+    $account_id = $account['id'];
+    $access_token = $account['access_token'];
+    logMsg("Account found: $account_id");
+    
 } catch (Exception $e) {
-    logMsg("Error: " . $e->getMessage());
-} finally {
-    if (file_exists($lockFile)) unlink($lockFile);
+    die("DB ERROR: " . $e->getMessage() . "\n");
 }
+
+// 3. Get total items from ML
+logMsg("Fetching items from Mercado Libre...");
+$searchData = callMeliApi("/users/$ml_user_id/items/search?status=active&limit=50&offset=0", $access_token);
+
+if (!$searchData) {
+    die("ERROR: Failed to fetch items from ML API\n");
+}
+
+$total = $searchData['paging']['total'] ?? 0;
+$itemIds = $searchData['results'] ?? [];
+
+logMsg("Found $total items on ML. Processing first batch of " . count($itemIds) . " items...");
+
+// 4. Fetch and update each item
+$updated = 0;
+foreach ($itemIds as $mlId) {
+    if (time() - $START_TIME > $MAX_EXECUTION_TIME) {
+        logMsg("Time limit reached. Stopping.");
+        break;
+    }
+    
+    $itemData = callMeliApi("/items/$mlId", $access_token);
+    if (!$itemData) continue;
+    
+    try {
+        // Upsert item
+        $sql = "INSERT INTO items (
+            account_id, ml_id, title, price, status, permalink, thumbnail,
+            sold_quantity, available_quantity, shipping_mode, logistic_type,
+            free_shipping, date_created, updated_at
+        ) VALUES (
+            :account_id, :ml_id, :title, :price, :status, :permalink, :thumbnail,
+            :sold_quantity, :available_quantity, :shipping_mode, :logistic_type,
+            :free_shipping, :date_created, NOW()
+        ) ON CONFLICT (ml_id) DO UPDATE SET
+            title = EXCLUDED.title,
+            price = EXCLUDED.price,
+            status = EXCLUDED.status,
+            sold_quantity = EXCLUDED.sold_quantity,
+            available_quantity = EXCLUDED.available_quantity,
+            updated_at = NOW()";
+        
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute([
+            ':account_id' => $account_id,
+            ':ml_id' => $itemData['id'],
+            ':title' => $itemData['title'],
+            ':price' => $itemData['price'],
+            ':status' => $itemData['status'],
+            ':permalink' => $itemData['permalink'],
+            ':thumbnail' => $itemData['thumbnail'] ?? '',
+            ':sold_quantity' => $itemData['sold_quantity'] ?? 0,
+            ':available_quantity' => $itemData['available_quantity'] ?? 0,
+            ':shipping_mode' => $itemData['shipping']['mode'] ?? '',
+            ':logistic_type' => $itemData['shipping']['logistic_type'] ?? '',
+            ':free_shipping' => ($itemData['shipping']['free_shipping'] ?? false) ? 1 : 0,
+            ':date_created' => $itemData['date_created'] ?? date('Y-m-d H:i:s'),
+        ]);
+        
+        $updated++;
+    } catch (Exception $e) {
+        logMsg("Error updating item $mlId: " . $e->getMessage());
+    }
+}
+
+logMsg("Sync completed! Updated $updated items.");
+logMsg("Total execution time: " . (time() - $START_TIME) . " seconds");

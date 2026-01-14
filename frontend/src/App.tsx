@@ -5,6 +5,7 @@ import { AuthProvider, useAuth } from './context/AuthContext'
 import Dashboard from './features/analisador/pages/Dashboard'
 import Login from './features/analisador/pages/Login'
 import { AccountSwitcher } from './features/analisador/components/AccountSwitcher'
+import { LogoutButton } from './features/analisador/components/LogoutButton'
 import { Toaster } from 'sonner'
 import './App.css'
 
@@ -33,8 +34,10 @@ function App() {
                   <div className="max-w-7xl mx-auto space-y-8">
                     <header className="flex items-center justify-between pb-6 border-b border-gray-200">
                       <h1 className="text-2xl font-bold tracking-tight text-gray-900">Meli360 <span className="text-gray-400 font-light">Analisador</span></h1>
-                      <div className="flex items-center gap-4">
+                      <div className="flex items-center gap-2">
                         <AccountSwitcher />
+                        <div className="h-6 w-px bg-gray-200 mx-2" /> {/* Divider */}
+                        <LogoutButton />
                       </div>
                     </header>
 

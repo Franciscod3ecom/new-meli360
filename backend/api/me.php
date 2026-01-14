@@ -13,13 +13,22 @@ if (!isset($_SESSION['user_id'])) {
 try {
     $pdo = getDatabaseConnection();
     
-    // Optional: Validate if user still exists in DB or just trust session
-    // For robustness, let's just return session data if available
+    // Get account_id from database
+    $stmt = $pdo->prepare("SELECT id, ml_user_id, nickname FROM accounts WHERE ml_user_id = :ml_user_id LIMIT 1");
+    $stmt->execute([':ml_user_id' => $_SESSION['user_id']]);
+    $account = $stmt->fetch(PDO::FETCH_ASSOC);
+    
+    if (!$account) {
+        echo json_encode(['authenticated' => false]);
+        exit;
+    }
+    
     echo json_encode([
         'authenticated' => true, 
         'user' => [
-            'ml_user_id' => $_SESSION['user_id'],
-            'nickname' => $_SESSION['nickname'] ?? 'User'
+            'id' => $account['id'], // UUID for filtering items
+            'ml_user_id' => $account['ml_user_id'],
+            'nickname' => $account['nickname']
         ]
     ]);
 
