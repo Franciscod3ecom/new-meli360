@@ -69,5 +69,30 @@ export const api = {
             console.error('Switch account error:', error);
             throw error;
         }
+    },
+    validateLicense: async (email: string, mlUserId: string) => {
+        try {
+            const response = await fetch(`${BACKEND_URL}/api/validate_license.php`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email, ml_user_id: mlUserId })
+            });
+            const data = await response.json();
+            if (!response.ok) throw new Error(data.error || 'Validation failed');
+            return data;
+        } catch (error) {
+            console.error('License validation error:', error);
+            throw error;
+        }
+    },
+    checkLicense: async () => {
+        try {
+            const response = await fetch(`${BACKEND_URL}/api/check_license.php`);
+            if (!response.ok) return { validated: false };
+            return await response.json();
+        } catch (error) {
+            console.error('License check error:', error);
+            return { validated: false };
+        }
     }
 };
