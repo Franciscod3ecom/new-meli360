@@ -94,5 +94,13 @@ export const api = {
             console.error('License check error:', error);
             return { validated: false };
         }
-    }
+    },
+
+  async getAnalytics() {
+    const res = await fetch(`${BACKEND_URL}/api/analytics.php`, {
+      credentials: 'include'
+    })
+    if (!res.ok) throw new Error('Failed to fetch analytics')
+    return res.json()
+  }
 };

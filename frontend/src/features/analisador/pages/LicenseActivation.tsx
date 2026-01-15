@@ -28,14 +28,14 @@ export default function LicenseActivation() {
     }
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-gray-900 via-blue-900 to-gray-900 flex items-center justify-center p-6">
-            <div className="max-w-md w-full">
+        <div className="fixed inset-0 min-h-screen w-full bg-gradient-to-br from-gray-900 via-black to-gray-900 flex items-center justify-center p-6 overflow-y-auto">
+            <div className="max-w-md w-full my-auto">
                 {/* Card */}
                 <div className="bg-white/10 backdrop-blur-lg rounded-2xl shadow-2xl border border-white/20 p-8">
                     {/* Icon */}
                     <div className="flex justify-center mb-6">
-                        <div className="p-4 bg-blue-500/20 rounded-full">
-                            <ShieldCheck className="w-12 h-12 text-blue-400" />
+                        <div className="p-4 bg-yellow-500/20 rounded-full">
+                            <ShieldCheck className="w-12 h-12 text-yellow-400" />
                         </div>
                     </div>
 
@@ -72,7 +72,7 @@ export default function LicenseActivation() {
                         <button
                             type="submit"
                             disabled={isValidating}
-                            className="w-full py-3 px-6 bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white font-semibold rounded-lg shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none flex items-center justify-center gap-2"
+                            className="w-full py-3 px-6 bg-gradient-to-r from-yellow-600 to-yellow-500 hover:from-yellow-500 hover:to-yellow-400 text-white font-semibold rounded-lg shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none flex items-center justify-center gap-2"
                         >
                             {isValidating ? (
                                 <>

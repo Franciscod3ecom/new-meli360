@@ -4,11 +4,15 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { LicenseProvider, useLicense } from './context/LicenseContext'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import Dashboard from './features/analisador/pages/Dashboard'
+import AnalyticsDashboard from './features/analisador/pages/AnalyticsDashboard'
 import Login from './features/analisador/pages/Login'
 import LicenseActivation from './features/analisador/pages/LicenseActivation'
 import { AccountSwitcher } from './features/analisador/components/AccountSwitcher'
 import { LogoutButton } from './features/analisador/components/LogoutButton'
+import { Link, useLocation } from 'react-router-dom'
+import { BarChart3, Package } from 'lucide-react'
 import { Toaster } from 'sonner'
+import { cn } from './lib/utils'
 import './App.css'
 
 const queryClient = new QueryClient()
@@ -50,19 +54,23 @@ function App() {
                   <ProtectedRoute>
                     <div className="min-h-screen bg-gray-50/50 p-6 font-sans text-gray-900">
                       <div className="max-w-7xl mx-auto space-y-8">
-                        <header className="flex items-center justify-between pb-6 border-b border-gray-200">
-                          <h1 className="text-2xl font-bold tracking-tight text-gray-900">Meli360 <span className="text-gray-400 font-light">Analisador</span></h1>
-                          <div className="flex items-center gap-2">
-                            <AccountSwitcher />
-                            <div className="h-6 w-px bg-gray-200 mx-2" /> {/* Divider */}
-                            <LogoutButton />
+                        <header className="pb-6 border-b border-gray-200">
+                          <div className="flex items-center justify-between mb-4">
+                            <h1 className="text-2xl font-bold tracking-tight text-gray-900">Meli360 <span className="text-gray-400 font-light">Analisador</span></h1>
+                            <div className="flex items-center gap-2">
+                              <AccountSwitcher />
+                              <div className="h-6 w-px bg-gray-200 mx-2" /> {/* Divider */}
+                              <LogoutButton />
+                            </div>
                           </div>
+                          <Navigation />
                         </header>
 
                         <main>
                           <Routes>
                             <Route path="/" element={<Navigate to="/inventory" replace />} />
                             <Route path="/inventory" element={<Dashboard />} />
+                            <Route path="/analytics" element={<AnalyticsDashboard />} />
                           </Routes>
                         </main>
                       </div>
@@ -76,6 +84,39 @@ function App() {
         </LicenseGate>
       </LicenseProvider>
     </QueryClientProvider>
+  )
+}
+
+function Navigation() {
+  const location = useLocation()
+
+  const links = [
+    { path: '/inventory', label: 'Inventário', icon: Package },
+    { path: '/analytics', label: 'Analytics', icon: BarChart3 }
+  ]
+
+  return (
+    <nav className="flex gap-2">
+      {links.map(link => {
+        const Icon = link.icon
+        const isActive = location.pathname === link.path
+        return (
+          <Link
+            key={link.path}
+            to={link.path}
+            className={cn(
+              "flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all",
+              isActive
+                ? "bg-blue-600 text-white shadow-md"
+                : "bg-white text-gray-600 hover:bg-gray-100 border border-gray-200"
+            )}
+          >
+            <Icon className="w-4 h-4" />
+            {link.label}
+          </Link>
+        )
+      })}
+    </nav>
   )
 }
 

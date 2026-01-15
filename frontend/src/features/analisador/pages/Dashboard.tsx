@@ -26,6 +26,10 @@ interface Item {
     status: string
     permalink: string
     thumbnail: string
+    secure_thumbnail?: string
+    health?: number
+    original_price?: number
+    currency_id?: string
     sold_quantity: number
     available_quantity: number
     shipping_mode: string
@@ -49,7 +53,7 @@ export default function Dashboard() {
         queryKey: ['items', user?.id], // Add user.id to cache key
         queryFn: async () => {
             if (!user?.id) return []
-            
+
             const { data, error } = await supabase
                 .from('items')
                 .select('*')
@@ -140,6 +144,30 @@ export default function Dashboard() {
         if (days > 60) return "bg-red-50 hover:bg-red-100"
         if (days > 30) return "bg-yellow-50 hover:bg-yellow-100"
         return "hover:bg-gray-50"
+    }
+
+    // Format Currency Helper
+    const formatMoney = (amount: number, currency = 'BRL') => {
+        return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: currency }).format(amount)
+    }
+
+    // Health Badge Helper
+    const HealthBadge = ({ health }: { health?: number }) => {
+        if (health === undefined || health === null) return null
+
+        const percentage = Math.round(health * 100)
+        let color = 'bg-gray-100 text-gray-600'
+
+        if (percentage >= 90) color = 'bg-green-100 text-green-700'
+        else if (percentage >= 70) color = 'bg-blue-100 text-blue-700'
+        else if (percentage >= 50) color = 'bg-yellow-100 text-yellow-700'
+        else color = 'bg-red-100 text-red-700'
+
+        return (
+            <span className={cn("px-1.5 py-0.5 rounded text-[10px] font-bold border", color)}>
+                {percentage}%
+            </span>
+        )
     }
 
     if (isLoading) return <div className="p-8 text-center">Carregando inventário...</div>
@@ -236,12 +264,12 @@ export default function Dashboard() {
                                         {(filteredItems?.length || 0) > 0 && selectedItems.size === (filteredItems?.length || 0) ? <CheckSquare className="w-5 h-5" /> : <Square className="w-5 h-5" />}
                                     </button>
                                 </th>
-                                <th className="px-4 py-3 w-16">Foto</th>
+                                <th className="px-4 py-3 w-20">Foto</th>
                                 <th className="px-4 py-3">Anúncio</th>
                                 <th className="px-4 py-3 w-32">Logística</th>
                                 <th className="px-4 py-3 w-24 text-center">Vendas</th>
-                                <th className="px-4 py-3 w-24 text-center">Dias Parado</th>
-                                <th className="px-4 py-3 w-24 text-right">Preço</th>
+                                <th className="px-4 py-3 w-24 text-center">Saúde</th>
+                                <th className="px-4 py-3 w-32 text-right">Preço</th>
                                 <th className="px-4 py-3 w-10"></th>
                             </tr>
                         </thead>
@@ -254,50 +282,69 @@ export default function Dashboard() {
                                         </button>
                                     </td>
                                     <td className="px-4 py-3">
-                                        <img src={item.thumbnail} alt="" className="w-12 h-12 object-cover rounded-md border border-gray-200" />
+                                        <div className="relative group">
+                                            <img
+                                                src={item.secure_thumbnail || item.thumbnail}
+                                                alt=""
+                                                className="w-16 h-16 object-cover rounded-md border border-gray-200 shadow-sm"
+                                            />
+                                        </div>
                                     </td>
-                                    <td className="px-4 py-3">
-                                        <a href={item.permalink} target="_blank" rel="noreferrer" className="font-medium text-gray-900 hover:underline line-clamp-2" title={item.title}>
+                                    <td className="px-4 py-3 max-w-md">
+                                        <a href={item.permalink} target="_blank" rel="noreferrer" className="font-medium text-gray-900 hover:underline line-clamp-2 leading-tight" title={item.title}>
                                             {item.title}
                                         </a>
-                                        <div className="text-xs text-gray-500 mt-1 flex gap-2">
-                                            <span>{item.ml_id}</span>
+                                        <div className="text-xs text-gray-500 mt-1.5 flex flex-wrap gap-2 items-center">
+                                            <span className="font-mono bg-gray-100 px-1 rounded">{item.ml_id}</span>
                                             <span className={cn("px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase",
                                                 item.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'
                                             )}>
                                                 {item.status}
                                             </span>
+                                            {(item.days_without_sale || 0) > 0 && (
+                                                <span className={cn("text-[10px]",
+                                                    (item.days_without_sale || 0) > 60 ? "text-red-500 font-bold" : "text-gray-400"
+                                                )}>
+                                                    • {item.days_without_sale}d sem venda
+                                                </span>
+                                            )}
                                         </div>
                                     </td>
                                     <td className="px-4 py-3">
-                                        <div className="flex gap-2">
+                                        <div className="flex flex-col gap-1 items-start">
                                             {item.logistic_type === 'fulfillment' && (
-                                                <span className="flex items-center gap-1 px-2 py-1 bg-yellow-100 text-yellow-800 rounded-full text-xs font-semibold" title="Full">
-                                                    <Zap className="w-3 h-3 fill-current" /> Full
+                                                <span className="flex items-center gap-1 px-2 py-1 bg-yellow-100 text-yellow-800 rounded-full text-xs font-bold" title="Full">
+                                                    <Zap className="w-3 h-3 fill-current" /> FULL
                                                 </span>
                                             )}
-                                            {item.shipping_mode === 'me2' && (
+                                            {item.shipping_mode === 'me2' && item.logistic_type !== 'fulfillment' && (
                                                 <span className="flex items-center gap-1 px-2 py-1 bg-blue-50 text-blue-700 rounded-full text-xs font-semibold" title="Mercado Envios">
                                                     <Truck className="w-3 h-3" /> ME2
                                                 </span>
                                             )}
+                                            {item.free_shipping && (
+                                                <span className="text-[10px] text-green-600 font-medium px-1">Frete Grátis</span>
+                                            )}
                                         </div>
                                     </td>
                                     <td className="px-4 py-3 text-center">
-                                        <div className="font-semibold">{item.sold_quantity}</div>
-                                        <div className="text-xs text-gray-400">Total</div>
+                                        <div className="font-bold text-gray-900">{item.sold_quantity}</div>
+                                        <div className="text-[10px] text-gray-400 uppercase">Vendas</div>
                                     </td>
                                     <td className="px-4 py-3 text-center">
-                                        <div className={cn("font-bold text-lg",
-                                            (item.days_without_sale || 0) > 60 ? "text-red-500" :
-                                                (item.days_without_sale || 0) > 30 ? "text-yellow-600" : "text-gray-400"
-                                        )}>
-                                            {item.days_without_sale}
-                                        </div>
-                                        <div className="text-[10px] text-gray-400">dias</div>
+                                        <HealthBadge health={item.health} />
                                     </td>
-                                    <td className="px-4 py-3 text-right font-medium">
-                                        R$ {Number(item.price).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                    <td className="px-4 py-3 text-right">
+                                        <div className="flex flex-col items-end">
+                                            {item.original_price && item.original_price > item.price && (
+                                                <span className="text-xs text-gray-400 line-through">
+                                                    {formatMoney(item.original_price, item.currency_id)}
+                                                </span>
+                                            )}
+                                            <span className={cn("font-bold text-gray-900", item.original_price && item.original_price > item.price ? "text-green-600" : "")}>
+                                                {formatMoney(item.price, item.currency_id)}
+                                            </span>
+                                        </div>
                                     </td>
                                     <td className="px-4 py-3 text-right">
                                         <button className="p-1 hover:bg-black/5 rounded text-gray-400 hover:text-gray-900">
