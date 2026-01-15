@@ -65,7 +65,7 @@ export default function AnalyticsDashboard() {
             <div className="flex items-center justify-center h-96">
                 <div className="text-center">
                     <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-                    <p className="mt-4 text-gray-600">Carregando analytics...</p>
+                    <p className="mt-4 text-gray-600">Carregando Analytics.</p>
                 </div>
             </div>
         )
@@ -74,7 +74,7 @@ export default function AnalyticsDashboard() {
     if (error || !data) {
         return (
             <div className="p-8 text-center text-red-500">
-                <p className="font-bold">Erro ao carregar analytics</p>
+                <p className="font-bold">Erro ao carregar Analytics</p>
                 <p className="text-sm mt-2">{(error as Error)?.message || 'Unknown error'}</p>
             </div>
         )
@@ -103,12 +103,12 @@ export default function AnalyticsDashboard() {
     return (
         <div className="space-y-6 pb-8">
             {/* Header */}
-            <div className="bg-gradient-to-r from-blue-600 to-purple-600 text-white p-6 rounded-lg shadow-lg">
+            <div className="bg-gradient-to-r from-yellow-700 to-yellow-400 text-white p-6 rounded-lg shadow-lg">
                 <h1 className="text-3xl font-bold flex items-center gap-3">
                     <TrendingUp className="w-8 h-8" />
                     Analytics Overview
                 </h1>
-                <p className="text-blue-100 mt-2">Insights do seu inventário em tempo real</p>
+                <p className="text-grey-100 mt-2">Insights do seu inventário em tempo real</p>
             </div>
 
             {/* Stats Cards */}
@@ -118,7 +118,7 @@ export default function AnalyticsDashboard() {
                     title="Total de Itens"
                     value={data.overview.total_items.toString()}
                     subtitle={`${data.overview.active_items} ativos`}
-                    color="blue"
+                    color="yellow"
                 />
                 <StatCard
                     icon={<Heart className="w-6 h-6" />}
@@ -249,13 +249,14 @@ function StatCard({ icon, title, value, subtitle, color }: {
     title: string
     value: string
     subtitle: string
-    color: 'blue' | 'green' | 'purple' | 'red'
+    color: 'blue' | 'green' | 'purple' | 'red' | 'yellow'
 }) {
     const colorClasses = {
         blue: 'from-blue-500 to-blue-600',
         green: 'from-green-500 to-green-600',
         purple: 'from-purple-500 to-purple-600',
-        red: 'from-red-500 to-red-600'
+        red: 'from-red-500 to-red-600',
+        yellow: 'from-yellow-500 to-yellow-600'
     }
 
     return (
