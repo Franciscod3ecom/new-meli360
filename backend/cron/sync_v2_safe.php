@@ -1,11 +1,11 @@
 <?php
-// backend/cron/sync_v2.php
-// SYNC V2 (PRODUCTION SAFE MODE)
-// Versão otimizada para evitar Timeouts e Erros 500
+// backend/cron/sync_v2_safe.php
+// SAFE MODE SYNC V2 (Small Batch + Verbose Error)
+// FIX: Using getDatabaseConnection() properly
 ini_set('display_errors', 1);
 error_reporting(E_ALL);
-ini_set('memory_limit', '512M');
-set_time_limit(300); // 5 min
+ini_set('memory_limit', '256M');
+set_time_limit(300); // 5 minutes
 
 header('Content-Type: text/plain; charset=utf-8');
 
@@ -30,20 +30,22 @@ function logAndFlush($msg)
         ob_flush();
 }
 
-$BATCH_LIMIT = 20; // Aumentado para produção (era 5 no teste)
+$START_TIME = time();
+$BATCH_LIMIT = 5; // Reduced for safety check
 
-echo "=== SYNC V2 (PRODUCTION) ===\n";
+echo "=== SYNC V2 (SAFE MODE) ===\n";
 echo "Batch Limit: $BATCH_LIMIT items\n\n";
 
 try {
     // 1. Session Check
     if (!isset($_SESSION['user_id'])) {
-        die("ERRO: Nenhuma sessão ativa. Por favor, faça login novamente no Painel Administrativo.\n");
+        die("ERRO: Nenhuma sessão ativa. Faça login no Meli360 primeiro.\n");
     }
     $ml_user_id = $_SESSION['user_id'];
     logAndFlush("Usuário: $ml_user_id");
 
     // 2. DB Connection
+    logAndFlush("Conectando ao Banco...");
     $pdo = getDatabaseConnection();
 
     // 3. Account Data
@@ -62,7 +64,7 @@ try {
     // Helper: Refresh Token
     function doRefresh($pdo, $refresh_token, $app_id, $secret, $ml_user_id)
     {
-        logAndFlush("Token expirado. Renovando...");
+        logAndFlush("Token expirado. Tentando Refresh...");
         $ch = curl_init("https://api.mercadolibre.com/oauth/token");
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
         curl_setopt($ch, CURLOPT_POST, true);
@@ -79,10 +81,10 @@ try {
             $sql = "UPDATE accounts SET access_token = :a, refresh_token = :r, expires_at = NOW() + INTERVAL '6 hours', updated_at = NOW() WHERE ml_user_id = :u";
             $stmt = $pdo->prepare($sql);
             $stmt->execute([':a' => $data['access_token'], ':r' => $data['refresh_token'], ':u' => $ml_user_id]);
-            logAndFlush("Token Renovado com Sucesso!");
+            logAndFlush("Token Renovado!");
             return $data['access_token'];
         }
-        logAndFlush("ERRO DE RENOVAÇÃO: " . ($data['message'] ?? 'Unknown'));
+        logAndFlush("ERRO Refresh: " . ($data['message'] ?? 'Unknown'));
         return false;
     }
 
@@ -99,32 +101,34 @@ try {
     }
 
     // 4. Listing Items
-    logAndFlush("Buscando lista de itens ativos...");
+    logAndFlush("Buscando itens na API...");
     $res = requestAPI("/users/$ml_user_id/items/search?status=active&limit=$BATCH_LIMIT", $access_token);
 
-    // Auto-Refresh Logic on 401
     if ($res['code'] == 401) {
         $access_token = doRefresh($pdo, $refresh_token, $APP_ID, $SECRET_KEY, $ml_user_id);
         if (!$access_token)
-            die("Falha fatal de autenticação. Tente fazer logout e login novamente.\n");
-        // Retry
+            die("Falha fatal de autenticação.\n");
         $res = requestAPI("/users/$ml_user_id/items/search?status=active&limit=$BATCH_LIMIT", $access_token);
     }
 
     $items = $res['body']['results'] ?? [];
     if (empty($items))
-        die("Nenhum item ativo encontrado para sincronizar.\n");
+        die("Nenhum item encontrado.\n");
 
-    logAndFlush("Total na fila: " . count($items));
+    logAndFlush("Encontrados: " . count($items) . " (Limitado a $BATCH_LIMIT)");
 
     // 5. Processing Batch
     $count = 0;
     foreach ($items as $itemId) {
+        echo "\nProcessando $itemId... ";
+
         // Item Details
         $rItem = requestAPI("/items/$itemId?include_attributes=all", $access_token);
         $item = $rItem['body'];
-        if (!$item)
+        if (!$item) {
+            echo "[ERRO API]";
             continue;
+        }
 
         // Visits
         $rVisits = requestAPI("/items/$itemId/visits", $access_token);
@@ -139,13 +143,13 @@ try {
             }
         }
 
-        // Image Logic
+        // Logic
         $secure_thumbnail = $item['thumbnail'];
         if (!empty($item['pictures'][0]['secure_url'])) {
             $secure_thumbnail = $item['pictures'][0]['secure_url'];
         }
 
-        // DB Upsert
+        // DB Update
         try {
             $sql = "INSERT INTO items (
                 account_id, ml_id, title, price, status, permalink, thumbnail,
@@ -195,19 +199,15 @@ try {
                 ':visits' => $visits,
                 ':sale_date' => $lastSale
             ]);
+            echo "[OK]";
             $count++;
-            echo ".";
-            if ($count % 10 == 0)
-                echo " ($count) ";
-            flush();
-
         } catch (PDOException $e) {
-            // Ignora erro de duplicidade se ocorrer, mas loga
+            echo "[DB ERRO: " . $e->getMessage() . "]";
         }
     }
 
-    echo "\n\n=== SYNC COMPLETADO: $count itens atualizados ===\n";
+    echo "\n\n=== SYNC SAFE MODE COMPLETED ($count updated) ===\n";
 
 } catch (Throwable $t) {
-    echo "\n[FATAL ERROR] " . $t->getMessage();
+    echo "\n[FATAL] " . $t->getMessage();
 }

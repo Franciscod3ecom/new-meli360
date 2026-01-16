@@ -21,7 +21,7 @@ function LicenseGate({ children }: { children: ReactNode }) {
   const { isLicenseValid, isCheckingLicense } = useLicense()
 
   if (isCheckingLicense) {
-    return <div className="h-screen flex items-center justify-center bg-gray-900 text-white">Verificando licença...</div>
+    return <div className="h-screen w-full flex items-center justify-center bg-white text-gray-500 text-sm">Verificando licença...</div>
   }
 
   if (!isLicenseValid) {
