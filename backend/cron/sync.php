@@ -1,315 +1,347 @@
 <?php
 // backend/cron/sync.php
-// PRODUCTION VERSION WITH AUTO REFRESH
-error_reporting(E_ALL);
+// SYNC V2 (PRODUCTION SAFE MODE)
+// Versão otimizada para evitar Timeouts e Erros 500
 ini_set('display_errors', 1);
+error_reporting(E_ALL);
+ini_set('memory_limit', '512M');
+set_time_limit(300); // 5 min
+
 header('Content-Type: text/plain; charset=utf-8');
 
 session_start();
 
 require_once __DIR__ . '/../config/database.php';
-// Load Config for Client ID/Secret
-$config = require __DIR__ . '/../config/config.php';
+
+// Safe Load Config
+$configFile = __DIR__ . '/../config/config.php';
+if (!file_exists($configFile))
+    die("Config missing");
+$config = require $configFile;
+
 $APP_ID = $config['MELI_APP_ID'];
 $SECRET_KEY = $config['MELI_SECRET_KEY'];
 
-// Configuration
-$MAX_EXECUTION_TIME = 60; // Increased
-$BATCH_SIZE = 50;
-$START_TIME = time();
-
-function logMsg($msg) {
-    echo "[" . date('Y-m-d H:i:s') . "] $msg\n";
+function logAndFlush($msg)
+{
+    echo "[" . date('H:i:s') . "] $msg\n";
     flush();
+    if (ob_get_level() > 0)
+        ob_flush();
 }
 
-function refreshToken($pdo, $refresh_token, $app_id, $secret, $ml_user_id) {
-    logMsg("Token expired (401). Attempting refresh...");
-    $ch = curl_init("https://api.mercadolibre.com/oauth/token");
-    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-    curl_setopt($ch, CURLOPT_POST, true);
-    curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query([
-        'grant_type' => 'refresh_token',
-        'client_id' => $app_id,
-        'client_secret' => $secret,
-        'refresh_token' => $refresh_token
-    ]));
-    
-    $response = curl_exec($ch);
-    $data = json_decode($response, true);
-    curl_close($ch);
-    
-    if (isset($data['access_token'])) {
-        logMsg("Success! New token generated.");
-        
-        // Update DB
-        $new_access = $data['access_token'];
-        $new_refresh = $data['refresh_token'];
-        $expires_in = $data['expires_in'];
-        $expires_at = date('Y-m-d H:i:s', time() + $expires_in);
-        
-        $sql = "UPDATE accounts SET access_token = :access, refresh_token = :refresh, expires_at = :expires, updated_at = NOW() WHERE ml_user_id = :user_id";
-        $stmt = $pdo->prepare($sql);
-        $stmt->execute([
-            ':access' => $new_access, 
-            ':refresh' => $new_refresh, 
-            ':expires' => $expires_at, 
-            ':user_id' => $ml_user_id
-        ]);
-        
-        return $new_access;
-    } else {
-        logMsg("REFRESH ERROR: " . ($data['message'] ?? 'Unknown error'));
+$BATCH_LIMIT = 20; // Aumentado para produção (era 5 no teste)
+
+// CEPs fixos para simulação de frete regional
+$CEPS_REGIONAIS = [
+    '70002900' => 'Brasília-DF',
+    '01001000' => 'São Paulo-SP',
+    '40020210' => 'Salvador-BA',
+    '69005070' => 'Manaus-AM',
+    '90010190' => 'Porto Alegre-RS'
+];
+
+echo "=== SYNC V3 (FREIGHT SYSTEM) ===\n";
+echo "Batch Limit: $BATCH_LIMIT items\n\n";
+
+try {
+    // 1. Session Check
+    if (!isset($_SESSION['user_id'])) {
+        die("ERRO: Nenhuma sessão ativa. Por favor, faça login novamente no Painel Administrativo.\n");
+    }
+    $ml_user_id = $_SESSION['user_id'];
+    logAndFlush("Usuário: $ml_user_id");
+
+    // 2. DB Connection
+    $pdo = getDatabaseConnection();
+
+    // 3. Account Data
+    $stmt = $pdo->prepare("SELECT * FROM accounts WHERE ml_user_id = :id LIMIT 1");
+    $stmt->execute([':id' => $ml_user_id]);
+    $account = $stmt->fetch(PDO::FETCH_ASSOC);
+
+    if (!$account)
+        die("Conta não encontrada no DB.\n");
+
+    $access_token = $account['access_token'];
+    $refresh_token = $account['refresh_token'];
+    $account_id = $account['id'];
+    logAndFlush("Conta ID: $account_id");
+
+    // Helper: Refresh Token
+    function doRefresh($pdo, $refresh_token, $app_id, $secret, $ml_user_id)
+    {
+        logAndFlush("Token expirado. Renovando...");
+        $ch = curl_init("https://api.mercadolibre.com/oauth/token");
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query([
+            'grant_type' => 'refresh_token',
+            'client_id' => $app_id,
+            'client_secret' => $secret,
+            'refresh_token' => $refresh_token
+        ]));
+        $data = json_decode(curl_exec($ch), true);
+        curl_close($ch);
+
+        if (isset($data['access_token'])) {
+            $sql = "UPDATE accounts SET access_token = :a, refresh_token = :r, expires_at = NOW() + INTERVAL '6 hours', updated_at = NOW() WHERE ml_user_id = :u";
+            $stmt = $pdo->prepare($sql);
+            $stmt->execute([':a' => $data['access_token'], ':r' => $data['refresh_token'], ':u' => $ml_user_id]);
+            logAndFlush("Token Renovado com Sucesso!");
+            return $data['access_token'];
+        }
+        logAndFlush("ERRO DE RENOVAÇÃO: " . ($data['message'] ?? 'Unknown'));
         return false;
     }
-}
 
-function callMeliApi($endpoint, $token) {
-    global $pdo, $refresh_token, $APP_ID, $SECRET_KEY, $ml_user_id;
+    // Helper: Safe Request
+    function requestAPI($endpoint, $token)
+    {
+        $ch = curl_init("https://api.mercadolibre.com$endpoint");
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, ["Authorization: Bearer $token"]);
+        $res = curl_exec($ch);
+        $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+        return ['code' => $code, 'body' => json_decode($res, true)];
+    }
 
-    $url = "https://api.mercadolibre.com$endpoint";
-    
-    $curl = curl_init();
-    curl_setopt_array($curl, [
-        CURLOPT_URL => $url,
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_TIMEOUT => 30,
-        CURLOPT_HTTPHEADER => ["Authorization: Bearer $token"],
-    ]);
-    
-    $response = curl_exec($curl);
-    $httpCode = curl_getinfo($curl, CURLINFO_HTTP_CODE);
-    curl_close($curl);
+    // Helper: Buscar custo de frete para um CEP específico
+    function buscarFretePorCep($itemId, $cep, $token)
+    {
+        $res = requestAPI("/items/$itemId/shipping_options?zip_code=$cep", $token);
+        if ($res['code'] == 200 && isset($res['body']['options'][0]['list_cost'])) {
+            return $res['body']['options'][0]['list_cost'];
+        }
+        return null;
+    }
 
-    // Initial check for 401
-    if ($httpCode === 401) {
-        $newToken = refreshToken($pdo, $refresh_token, $APP_ID, $SECRET_KEY, $ml_user_id);
-        if ($newToken) {
-            // Update global token and retry
-            // NOTE: Logic here relies on caller updating their reference or us doing a recursive call with new token.
-            // Simplified: Recursive call with new token?
-            // Actually, we need to update the token variable in the main scope for subsequent calls in the loop
-            // But for this specific call, let's retry.
-            
-            logMsg("Retrying request with new token...");
-            $curl2 = curl_init();
-            curl_setopt_array($curl2, [
-                CURLOPT_URL => $url,
-                CURLOPT_RETURNTRANSFER => true,
-                CURLOPT_TIMEOUT => 30,
-                CURLOPT_HTTPHEADER => ["Authorization: Bearer $newToken"],
-            ]);
-            $response = curl_exec($curl2);
-            $httpCode = curl_getinfo($curl2, CURLINFO_HTTP_CODE);
-            curl_close($curl2);
-            
-            // If still fails, return null
-            if ($httpCode !== 200) {
-                 logMsg("API Error after refresh: HTTP $httpCode - $endpoint");
-                 return null;
+    // Helper: Buscar envio nacional (peso e custo médio)
+    function buscarEnvioNacional($itemId, $userId, $token)
+    {
+        $res = requestAPI("/users/$userId/shipping_options/free?item_id=$itemId", $token);
+        if ($res['code'] == 200 && isset($res['body']['coverage']['all_country'])) {
+            return [
+                'custo' => $res['body']['coverage']['all_country']['list_cost'] ?? null,
+                'peso' => $res['body']['coverage']['all_country']['billable_weight'] ?? null
+            ];
+        }
+        return null;
+    }
+
+    // Helper: Buscar detalhes da categoria (peso ideal)
+    function buscarCategoriaDetalhes($categoryId, $token)
+    {
+        $res = requestAPI("/categories/$categoryId/shipping_preferences", $token);
+        if ($res['code'] == 200) {
+            return $res['body'];
+        }
+        return null;
+    }
+
+    // Helper: Buscar nome da categoria
+    function buscarCategoriaNome($categoryId, $token)
+    {
+        $res = requestAPI("/categories/$categoryId", $token);
+        if ($res['code'] == 200 && isset($res['body']['name'])) {
+            return $res['body']['name'];
+        }
+        return null;
+    }
+
+    // Helper: Calcular status do peso
+    function calcularStatusPeso($pesoIdeal, $pesoFaturavel)
+    {
+        if (!$pesoIdeal || !$pesoFaturavel) {
+            return 'N/A';
+        }
+        if ($pesoFaturavel == $pesoIdeal) {
+            return '🟡 Peso aceitável';
+        }
+        if ($pesoFaturavel > $pesoIdeal) {
+            return '🔴 Peso alto e errado';
+        }
+        if ($pesoFaturavel < $pesoIdeal) {
+            return '🟢 Peso baixo e bom';
+        }
+        return 'N/A';
+    }
+
+    // 4. Listing Items
+    logAndFlush("Buscando lista de itens ativos...");
+    $res = requestAPI("/users/$ml_user_id/items/search?status=active&limit=$BATCH_LIMIT", $access_token);
+
+    // Auto-Refresh Logic on 401
+    if ($res['code'] == 401) {
+        $access_token = doRefresh($pdo, $refresh_token, $APP_ID, $SECRET_KEY, $ml_user_id);
+        if (!$access_token)
+            die("Falha fatal de autenticação. Tente fazer logout e login novamente.\n");
+        // Retry
+        $res = requestAPI("/users/$ml_user_id/items/search?status=active&limit=$BATCH_LIMIT", $access_token);
+    }
+
+    $items = $res['body']['results'] ?? [];
+    if (empty($items))
+        die("Nenhum item ativo encontrado para sincronizar.\n");
+
+    logAndFlush("Total na fila: " . count($items));
+
+    // 5. Processing Batch
+    $count = 0;
+    foreach ($items as $itemId) {
+        // Item Details
+        $rItem = requestAPI("/items/$itemId?include_attributes=all", $access_token);
+        $item = $rItem['body'];
+        if (!$item)
+            continue;
+
+        // Visits
+        $rVisits = requestAPI("/items/$itemId/visits", $access_token);
+        $visits = $rVisits['body'][$itemId] ?? 0;
+
+        // Last Sale
+        $lastSale = null;
+        if (($item['sold_quantity'] ?? 0) > 0) {
+            $rOrders = requestAPI("/orders/search?seller=$ml_user_id&item=$itemId&sort=date_desc&limit=1", $access_token);
+            if (!empty($rOrders['body']['results'])) {
+                $lastSale = $rOrders['body']['results'][0]['date_closed'];
             }
-            return json_decode($response, true);
-        } else {
-             logMsg("Failed to refresh token. Aborting.");
-             return null;
         }
-    }
-    
-    if ($httpCode !== 200) {
-        logMsg("API Error: HTTP $httpCode - $endpoint");
-        return null;
-    }
-    
-    return json_decode($response, true);
-}
 
-// --- MAIN LOGIC ---
-
-logMsg("Starting sync v3 (Auto-Refresh + Metrics)...");
-
-// 1. Check Session
-if (!isset($_SESSION['user_id'])) {
-    die("ERROR: No active session. Please login first.\n");
-}
-
-$ml_user_id = $_SESSION['user_id'];
-logMsg("Session found: $ml_user_id");
-
-// 2. Get Account from DB
-try {
-    $pdo = getDatabaseConnection();
-    $stmt = $pdo->prepare("SELECT * FROM accounts WHERE ml_user_id = :ml_user_id LIMIT 1");
-    $stmt->execute([':ml_user_id' => $ml_user_id]);
-    $account = $stmt->fetch(PDO::FETCH_ASSOC);
-    
-    if (!$account) {
-        die("ERROR: Account not found\n");
-    }
-    
-    $account_id = $account['id'];
-    $access_token = $account['access_token'];
-    $refresh_token = $account['refresh_token']; // Needed for refresh
-    logMsg("Account found: $account_id");
-    
-} catch (Exception $e) {
-    die("DB ERROR: " . $e->getMessage() . "\n");
-}
-
-// 3. Get total items - FIRST CALL (May trigger refresh)
-logMsg("Fetching items...");
-// Special handling for first call to update $access_token in main scope if refreshed
-// We'll wrap callMeliApi to handle the retry internally, but we need to ensure loop uses new token.
-// The callMeliApi above returns the data, but doesn't update $access_token variable in this scope easily without pass-by-ref or globals.
-// Let's rely on the DB being updated. If 401 happens in loop, we should probably re-fetch token from DB or return it.
-// Simpler approach: callMeliApi returns [data, newToken?] NO.
-// Let's make callMeliApi robust enough to just work. 
-// Ideally, we fetch items. If it initiates a refresh, it updates DB.
-// Subsequent calls might fail with old memory token? Yes.
-// We need to reload token from DB if a refresh happened? Or callMeliApi explicitly handles the retry.
-
-// RE-IMPLEMENTING callMeliApi to be simpler and update the token via reference or just handle the single request
-// Modification: We will implement a `requestWithRetry` function that uses global $access_token
-function requestWithRetry($endpoint) {
-    global $access_token, $refresh_token, $pdo, $APP_ID, $SECRET_KEY, $ml_user_id;
-    return callMeliApi($endpoint, $access_token); // This uses the global vars logic inside callMeliApi which RECURSES on 401
-    // Wait, the callMeliApi above DOES recurse.
-    // The issue is: subsequent calls in the loop will still pass the OLD $access_token.
-    // FIX: callMeliApi should accept token by reference OR we refresh the variable from DB if we detect a change?
-    // Let's modify callMeliApi to return the new token? No, too complex.
-    
-    // BETTER STRATEGY: 
-    // Just fetch items first. 
-    // If we detect a refresh inside callMeliApi, we should update the global $access_token.
-}
-
-// REDEFINING callMeliApi for this script scope
-function safeApiCall($endpoint) {
-    global $access_token, $refresh_token, $pdo, $APP_ID, $SECRET_KEY, $ml_user_id;
-    
-    $curl = curl_init();
-    curl_setopt_array($curl, [
-        CURLOPT_URL => "https://api.mercadolibre.com$endpoint",
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_TIMEOUT => 30,
-        CURLOPT_HTTPHEADER => ["Authorization: Bearer $access_token"],
-    ]);
-    
-    $response = curl_exec($curl);
-    $httpCode = curl_getinfo($curl, CURLINFO_HTTP_CODE);
-    curl_close($curl);
-    
-    if ($httpCode === 401) {
-        $newToken = refreshToken($pdo, $refresh_token, $APP_ID, $SECRET_KEY, $ml_user_id);
-        if ($newToken) {
-            $access_token = $newToken; // UPDATE GLOBAL VARIABLE
-            
-            // Retry
-            $curl2 = curl_init();
-            curl_setopt_array($curl2, [
-                CURLOPT_URL => "https://api.mercadolibre.com$endpoint",
-                CURLOPT_RETURNTRANSFER => true,
-                CURLOPT_TIMEOUT => 30,
-                CURLOPT_HTTPHEADER => ["Authorization: Bearer $access_token"],
-            ]);
-            $response = curl_exec($curl2);
-            $httpCode = curl_getinfo($curl2, CURLINFO_HTTP_CODE);
-            curl_close($curl2);
-        } else {
-             return null;
-        }
-    }
-    
-    if ($httpCode !== 200) {
-        logMsg("API Error: HTTP $httpCode - $endpoint");
-        return null;
-    }
-    
-    return json_decode($response, true);
-}
-
-
-$searchData = safeApiCall("/users/$ml_user_id/items/search?status=active&limit=50");
-
-if (!$searchData) die("ERROR: Failed to fetch items\n");
-
-$itemIds = $searchData['results'] ?? [];
-logMsg("Processing batch of " . count($itemIds) . " items...");
-
-// 4. Fetch Details
-$updated = 0;
-foreach ($itemIds as $mlId) {
-    if (time() - $START_TIME > $MAX_EXECUTION_TIME) break;
-    
-    // Fetch FULL item details using SAFE CALL (auto-updates token if needed)
-    $item = safeApiCall("/items/$mlId?include_attributes=all");
-    if (!$item) continue;
-    
-    try {
-        // --- 1. High Res Image Logic ---
+        // Image Logic
         $secure_thumbnail = $item['thumbnail'];
-        if (!empty($item['pictures']) && is_array($item['pictures'])) {
-            $firstPic = $item['pictures'][0];
-            if (isset($firstPic['secure_url'])) {
-                $secure_thumbnail = $firstPic['secure_url'];
-            } elseif (isset($firstPic['url'])) {
-                $secure_thumbnail = $firstPic['url'];
+        if (!empty($item['pictures'][0]['secure_url'])) {
+            $secure_thumbnail = $item['pictures'][0]['secure_url'];
+        }
+
+        // === FREIGHT SYSTEM ===
+        $categoryId = $item['category_id'] ?? null;
+        $categoryName = null;
+        $envioNacional = null;
+        $pesoFaturavel = null;
+        $custoEnvio = null;
+        $fretes = ['brasilia' => null, 'sao_paulo' => null, 'salvador' => null, 'manaus' => null, 'porto_alegre' => null];
+        $statusPeso = 'N/A';
+        $me2Restrictions = null;
+
+        if ($categoryId) {
+            // Buscar nome da categoria
+            $categoryName = buscarCategoriaNome($categoryId, $access_token);
+
+            // Buscar envio nacional (custo e peso faturável)
+            $envioNacional = buscarEnvioNacional($itemId, $ml_user_id, $access_token);
+            if ($envioNacional) {
+                $pesoFaturavel = $envioNacional['peso'];
+                $custoEnvio = $envioNacional['custo'];
+            }
+
+            // Buscar detalhes da categoria (para peso ideal e restrições)
+            $categoriaDetalhes = buscarCategoriaDetalhes($categoryId, $access_token);
+            if ($categoriaDetalhes) {
+                $pesoIdeal = $categoriaDetalhes['dimensions']['weight'] ?? null;
+                $statusPeso = calcularStatusPeso($pesoIdeal, $pesoFaturavel);
+                $me2Restrictions = isset($categoriaDetalhes['me2_restrictions']) ? json_encode($categoriaDetalhes['me2_restrictions']) : null;
+            }
+
+            // Simular frete para as 5 regiões
+            foreach ($CEPS_REGIONAIS as $cep => $cidade) {
+                $key = strtolower(str_replace(['-', ' '], ['_', '_'], explode('-', $cidade)[0]));
+                $fretes[$key] = buscarFretePorCep($itemId, $cep, $access_token);
             }
         }
-        
-        // --- 2. Advanced Metrics ---
-        $price = $item['price'];
-        $original_price = $item['original_price'] ?? null;
-        $currency_id = $item['currency_id'] ?? 'BRL';
-        $health = $item['health'] ?? 0.00;
-        
-        // Upsert
-        $sql = "INSERT INTO items (
-            account_id, ml_id, title, price, status, permalink, thumbnail,
-            sold_quantity, available_quantity, shipping_mode, logistic_type,
-            free_shipping, date_created, updated_at,
-            secure_thumbnail, health, original_price, currency_id
-        ) VALUES (
-            :account_id, :ml_id, :title, :price, :status, :permalink, :thumbnail,
-            :sold_quantity, :available_quantity, :shipping_mode, :logistic_type,
-            :free_shipping, :date_created, NOW(),
-            :secure_thumbnail, :health, :original_price, :currency_id
-        ) ON CONFLICT (ml_id) DO UPDATE SET
-            title = EXCLUDED.title,
-            price = EXCLUDED.price,
-            status = EXCLUDED.status,
-            sold_quantity = EXCLUDED.sold_quantity,
-            available_quantity = EXCLUDED.available_quantity,
-            secure_thumbnail = EXCLUDED.secure_thumbnail,
-            health = EXCLUDED.health,
-            original_price = EXCLUDED.original_price,
-            currency_id = EXCLUDED.currency_id,
-            updated_at = NOW()";
-        
-        $stmt = $pdo->prepare($sql);
-        $stmt->execute([
-            ':account_id' => $account_id,
-            ':ml_id' => $item['id'],
-            ':title' => $item['title'],
-            ':price' => $price,
-            ':status' => $item['status'],
-            ':permalink' => $item['permalink'],
-            ':thumbnail' => $item['thumbnail'],
-            ':sold_quantity' => $item['sold_quantity'],
-            ':available_quantity' => $item['available_quantity'],
-            ':shipping_mode' => $item['shipping']['mode'] ?? '',
-            ':logistic_type' => $item['shipping']['logistic_type'] ?? '',
-            ':free_shipping' => ($item['shipping']['free_shipping'] ?? false) ? 1 : 0,
-            ':date_created' => $item['date_created'],
-            ':secure_thumbnail' => $secure_thumbnail,
-            ':health' => $health,
-            ':original_price' => $original_price,
-            ':currency_id' => $currency_id
-        ]);
-        
-        $updated++;
-    } catch (Exception $e) {
-        logMsg("Error updating $mlId: " . $e->getMessage());
-    }
-}
 
-logMsg("Sync v3 completed! Updated $updated items.");
+        // DB Upsert
+        try {
+            $sql = "INSERT INTO items (
+                account_id, ml_id, title, price, status, permalink, thumbnail,
+                sold_quantity, available_quantity, shipping_mode, logistic_type,
+                free_shipping, date_created, updated_at,
+                secure_thumbnail, health, catalog_listing, original_price, currency_id,
+                total_visits, last_sale_date,
+                category_name, shipping_cost_nacional, billable_weight, weight_status,
+                freight_brasilia, freight_sao_paulo, freight_salvador, freight_manaus, freight_porto_alegre,
+                me2_restrictions
+            ) VALUES (
+                :acc, :id, :title, :price, :status, :link, :thumb,
+                :sold, :avail, :ship_mode, :log_type,
+                :free, :date, NOW(),
+                :sec_thumb, :health, :cat_list, :orig, :curr,
+                :visits, :sale_date,
+                :cat_name, :ship_cost, :weight, :weight_status,
+                :frete_bsb, :frete_sp, :frete_ssa, :frete_mao, :frete_poa,
+                :me2_rest
+            ) ON CONFLICT (ml_id) DO UPDATE SET
+                title = EXCLUDED.title,
+                price = EXCLUDED.price,
+                status = EXCLUDED.status,
+                sold_quantity = EXCLUDED.sold_quantity,
+                available_quantity = EXCLUDED.available_quantity,
+                secure_thumbnail = EXCLUDED.secure_thumbnail,
+                health = EXCLUDED.health,
+                catalog_listing = EXCLUDED.catalog_listing,
+                original_price = EXCLUDED.original_price,
+                currency_id = EXCLUDED.currency_id,
+                total_visits = EXCLUDED.total_visits,
+                last_sale_date = EXCLUDED.last_sale_date,
+                category_name = EXCLUDED.category_name,
+                shipping_cost_nacional = EXCLUDED.shipping_cost_nacional,
+                billable_weight = EXCLUDED.billable_weight,
+                weight_status = EXCLUDED.weight_status,
+                freight_brasilia = EXCLUDED.freight_brasilia,
+                freight_sao_paulo = EXCLUDED.freight_sao_paulo,
+                freight_salvador = EXCLUDED.freight_salvador,
+                freight_manaus = EXCLUDED.freight_manaus,
+                freight_porto_alegre = EXCLUDED.freight_porto_alegre,
+                me2_restrictions = EXCLUDED.me2_restrictions,
+                updated_at = NOW()";
+
+            $stmt = $pdo->prepare($sql);
+            $stmt->execute([
+                ':acc' => $account_id,
+                ':id' => $itemId,
+                ':title' => $item['title'],
+                ':price' => $item['price'],
+                ':status' => $item['status'],
+                ':link' => $item['permalink'],
+                ':thumb' => $item['thumbnail'],
+                ':sold' => $item['sold_quantity'],
+                ':avail' => $item['available_quantity'],
+                ':ship_mode' => $item['shipping']['mode'] ?? null,
+                ':log_type' => $item['shipping']['logistic_type'] ?? null,
+                ':free' => ($item['shipping']['free_shipping'] ?? false) ? 1 : 0,
+                ':date' => $item['date_created'],
+                ':sec_thumb' => $secure_thumbnail,
+                ':health' => $item['health'] ?? 0,
+                ':cat_list' => ($item['catalog_listing'] ?? false) ? 'true' : 'false',
+                ':orig' => $item['original_price'] ?? null,
+                ':curr' => $item['currency_id'],
+                ':visits' => $visits,
+                ':sale_date' => $lastSale,
+                ':cat_name' => $categoryName,
+                ':ship_cost' => $custoEnvio,
+                ':weight' => $pesoFaturavel,
+                ':weight_status' => $statusPeso,
+                ':frete_bsb' => $fretes['brasilia'],
+                ':frete_sp' => $fretes['sao_paulo'],
+                ':frete_ssa' => $fretes['salvador'],
+                ':frete_mao' => $fretes['manaus'],
+                ':frete_poa' => $fretes['porto_alegre'],
+                ':me2_rest' => $me2Restrictions
+            ]);
+            $count++;
+            echo ".";
+            if ($count % 10 == 0)
+                echo " ($count) ";
+            flush();
+
+        } catch (PDOException $e) {
+            // Ignora erro de duplicidade se ocorrer, mas loga
+        }
+    }
+
+    echo "\n\n=== SYNC COMPLETADO: $count itens atualizados ===\n";
+
+} catch (Throwable $t) {
+    echo "\n[FATAL ERROR] " . $t->getMessage();
+}

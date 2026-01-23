@@ -1,23 +1,13 @@
 
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { supabase } from '../../../lib/supabase'
 import { api } from '../../../services/api'
 import { useAuth } from '../../../context/AuthContext'
 import { SyncStatus } from '../components/SyncStatus'
-import {
-    Zap,
-    Truck,
-    RefreshCw,
-    MoreHorizontal,
-    Play,
-    Pause,
-    CheckSquare,
-    Square
-} from 'lucide-react'
+import { Download, Pause } from 'lucide-react'
 import { cn } from '../../../lib/utils'
 
-// Data Types based on Schema
+// Data Types
 interface Item {
     id: string
     ml_id: string
@@ -28,6 +18,7 @@ interface Item {
     thumbnail: string
     secure_thumbnail?: string
     health?: number
+    total_visits?: number
     original_price?: number
     currency_id?: string
     sold_quantity: number
@@ -38,67 +29,90 @@ interface Item {
     last_sale_date: string | null
     date_created: string
     days_without_sale?: number
-    is_synced?: number
+    category_name?: string
+    shipping_cost_nacional?: number
+    billable_weight?: number
+    weight_status?: string
 }
 
 export default function Dashboard() {
-    const { user } = useAuth() // Get current user
-    const [filter, setFilter] = useState<'all' | 'full' | 'stagnant' | 'no_sales'>('all')
-    const [isSyncing, setIsSyncing] = useState(false)
+    const { user } = useAuth()
+
+    // State
+    const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'paused' | 'no_stock' | 'closed'>('all')
+    const [salesFilter, setSalesFilter] = useState<'all' | 'never_sold' | 'over_30' | 'over_60' | 'over_90'>('all')
+    const [currentPage, setCurrentPage] = useState(1)
+    const [itemsPerPage, setItemsPerPage] = useState(100)
     const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set())
-    const [isBulkUpdating, setIsBulkUpdating] = useState(false)
+    const [isBulkPausing, setIsBulkPausing] = useState(false)
+    const [alertMessage, setAlertMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
 
-    // Query Data - NOW FILTERED BY ACCOUNT
-    const { data: items, isLoading, error, refetch } = useQuery({
-        queryKey: ['items', user?.id], // Add user.id to cache key
+    // Query Data
+    const { data: response, isLoading, error, refetch } = useQuery({
+        queryKey: ['items', user?.id, currentPage, itemsPerPage, statusFilter, salesFilter],
         queryFn: async () => {
-            if (!user?.id) return []
-
-            const { data, error } = await supabase
-                .from('items')
-                .select('*')
-                .eq('account_id', user.id) // FILTER BY ACCOUNT!
-                .order('last_sale_date', { ascending: true, nullsFirst: false })
-                .limit(200)
-
-            if (error) throw error
-
-            return data.map((item: any) => {
-                let days = 0;
-                if (item.last_sale_date) {
-                    const last = new Date(item.last_sale_date).getTime();
-                    const now = new Date().getTime();
-                    days = Math.floor((now - last) / (1000 * 3600 * 24));
-                } else if (item.date_created) {
-                    const created = new Date(item.date_created).getTime();
-                    const now = new Date().getTime();
-                    days = Math.floor((now - created) / (1000 * 3600 * 24));
-                }
-                return { ...item, days_without_sale: days } as Item
+            if (!user?.id) return null
+            return await api.getItems({
+                page: currentPage,
+                limit: itemsPerPage,
+                status_filter: statusFilter,
+                sales_filter: salesFilter
             })
         },
-        enabled: !!user?.id // Only run query if user is loaded
+        enabled: !!user?.id
     })
 
-    // Filter Logic
-    const filteredItems = items?.filter(item => {
-        if (filter === 'full') return item.logistic_type === 'fulfillment'
-        if (filter === 'stagnant') return (item.days_without_sale || 0) > 60
-        if (filter === 'no_sales') return item.sold_quantity === 0
-        return true
-    })
-
-    // Sync Handler
-    const handleSync = async () => {
-        setIsSyncing(true)
-        const success = await api.triggerSync()
-        if (success) {
-            setTimeout(() => refetch(), 2000)
-        }
-        setIsSyncing(false)
+    const items = response?.data || []
+    const pagination = response?.pagination || {
+        current_page: 1,
+        total_pages: 1,
+        total_items: 0,
+        items_per_page: 100
     }
 
-    // Bulk Selection Logic
+    // Calculate days without sale
+    const processedItems = items.map((item: any) => {
+        let days = 0
+        if (item.last_sale_date) {
+            const last = new Date(item.last_sale_date).getTime()
+            const now = new Date().getTime()
+            days = Math.floor((now - last) / (1000 * 3600 * 24))
+        } else if (item.sold_quantity > 0) {
+            // Had sales but no last_sale_date, estimate high
+            days = 999
+        } else if (item.date_created) {
+            const created = new Date(item.date_created).getTime()
+            const now = new Date().getTime()
+            days = Math.floor((now - created) / (1000 * 3600 * 24))
+        }
+        return { ...item, days_without_sale: days } as Item
+    })
+
+    // Handlers
+    const handleBulkPause = async () => {
+        if (selectedItems.size === 0) {
+            setAlertMessage({ type: 'error', text: 'Por favor, selecione pelo menos um anúncio.' })
+            return
+        }
+
+        if (!confirm(`Pausar ${selectedItems.size} anúncio(s) no Mercado Livre?`)) return
+
+        setIsBulkPausing(true)
+        try {
+            const result = await api.bulkPause(Array.from(selectedItems))
+            setAlertMessage({
+                type: 'success',
+                text: `Pausados: ${result.data.success}, Falhas: ${result.data.failed}`
+            })
+            setSelectedItems(new Set())
+            setTimeout(() => refetch(), 2000)
+        } catch (error: any) {
+            setAlertMessage({ type: 'error', text: error.message })
+        } finally {
+            setIsBulkPausing(false)
+        }
+    }
+
     const toggleSelection = (id: string) => {
         const newSelected = new Set(selectedItems)
         if (newSelected.has(id)) {
@@ -110,281 +124,299 @@ export default function Dashboard() {
     }
 
     const toggleSelectAll = () => {
-        if (selectedItems.size === filteredItems?.length && filteredItems?.length > 0) {
+        if (selectedItems.size === processedItems.length && processedItems.length > 0) {
             setSelectedItems(new Set())
         } else {
-            const allIds = filteredItems?.map(i => i.ml_id) || []
-            setSelectedItems(new Set(allIds))
+            setSelectedItems(new Set(processedItems.map((i: Item) => i.ml_id)))
         }
     }
 
-    // Bulk Action Logic
-    const handleBulkUpdate = async (action: 'paused' | 'active') => {
-        if (selectedItems.size === 0) return
-        if (!confirm(`Tem certeza que deseja ${action === 'paused' ? 'PAUSAR' : 'ATIVAR'} ${selectedItems.size} itens?`)) return
-
-        setIsBulkUpdating(true)
-        try {
-            const idsArray = Array.from(selectedItems)
-            await api.bulkUpdate(idsArray, action)
-
-            setSelectedItems(new Set())
-            refetch()
-            alert('Ação realizada com sucesso! Os status serão atualizados em instantes.')
-        } catch (e) {
-            alert('Erro ao realizar ação em massa. Tente novamente.')
-            console.error(e)
-        } finally {
-            setIsBulkUpdating(false)
-        }
-    }
-
-    const getRowClass = (item: Item) => {
+    // Sale Tag Helper
+    const getSaleTag = (item: Item) => {
         const days = item.days_without_sale || 0
-        if (days > 60) return "bg-red-50 hover:bg-red-100"
-        if (days > 30) return "bg-yellow-50 hover:bg-yellow-100"
-        return "hover:bg-gray-50"
+
+        if (item.sold_quantity === 0) {
+            return { text: 'Nunca Vendeu', class: 'bg-gray-700 text-white' }
+        }
+        if (!item.last_sale_date) {
+            return { text: '', class: '' }
+        }
+        if (days === 0) {
+            return { text: 'Vendeu Hoje', class: 'bg-green-100 text-green-800' }
+        }
+        if (days <= 60) {
+            return { text: `${days} dias s/ venda`, class: 'bg-yellow-100 text-yellow-800' }
+        }
+        return { text: `${days} dias s/ venda`, class: 'bg-red-100 text-red-800' }
     }
 
-    // Format Currency Helper
-    const formatMoney = (amount: number, currency = 'BRL') => {
-        return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: currency }).format(amount)
-    }
-
-    // Health Badge Helper
-    const HealthBadge = ({ health }: { health?: number }) => {
-        if (health === undefined || health === null) return null
-
-        const percentage = Math.round(health * 100)
-        let color = 'bg-gray-100 text-gray-600'
-
-        if (percentage >= 90) color = 'bg-green-100 text-green-700'
-        else if (percentage >= 70) color = 'bg-blue-100 text-blue-700'
-        else if (percentage >= 50) color = 'bg-yellow-100 text-yellow-700'
-        else color = 'bg-red-100 text-red-700'
-
-        return (
-            <span className={cn("px-1.5 py-0.5 rounded text-[10px] font-bold border", color)}>
-                {percentage}%
-            </span>
-        )
+    // Auto-hide alerts
+    if (alertMessage) {
+        setTimeout(() => setAlertMessage(null), 6000)
     }
 
     if (isLoading) return <div className="p-8 text-center">Carregando inventário...</div>
     if (error) return (
         <div className="p-8 text-center text-red-500">
-            <p className="font-bold">Erro ao carregar dados:</p>
-            <p className="text-sm font-mono mt-2">{(error as any).message || JSON.stringify(error)}</p>
+            <p className="font-bold">Erro ao carregar dados</p>
+            <p className="text-sm mt-2">{(error as any).message}</p>
         </div>
     )
 
     return (
-        <div className="space-y-6 pb-20"> {/* pb-20 for SyncStatus footer */}
-
-            {/* Sync Status Footer */}
+        <div className="space-y-6 pb-20">
             <SyncStatus />
 
-            {/* Controls */}
-            <div className="flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center bg-white p-4 rounded-lg shadow-sm border border-gray-100">
+            {/* Alert Messages */}
+            {alertMessage && (
+                <div className={cn(
+                    "p-4 rounded-lg text-sm font-medium",
+                    alertMessage.type === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                )}>
+                    {alertMessage.text}
+                </div>
+            )}
 
-                {/* Filters */}
-                <div className="flex gap-2">
-                    <FilterButton
-                        active={filter === 'all'}
-                        onClick={() => setFilter('all')}
-                        label="Todos"
-                    />
-                    <FilterButton
-                        active={filter === 'full'}
-                        onClick={() => setFilter('full')}
-                        label="Full"
-                        icon={<Zap className="w-3 h-3" />}
-                    />
-                    <FilterButton
-                        active={filter === 'stagnant'}
-                        onClick={() => setFilter('stagnant')}
-                        label="Parados (+60d)"
-                        className="text-red-700 bg-red-50 border-red-200"
-                    />
-                    <FilterButton
-                        active={filter === 'no_sales'}
-                        onClick={() => setFilter('no_sales')}
-                        label="Sem Vendas"
-                    />
+            {/* Main Card */}
+            <div className="bg-white shadow rounded-lg p-6">
+                {/* Header */}
+                <div className="flex justify-between items-center mb-4">
+                    <h2 className="text-lg font-semibold">📊 Seus Anúncios ({pagination.total_items})</h2>
+                    <div className="flex items-center gap-2">
+                        <button
+                            onClick={handleBulkPause}
+                            disabled={selectedItems.size === 0 || isBulkPausing}
+                            className="px-3 py-1.5 text-sm font-medium text-white bg-orange-500 rounded-md hover:bg-orange-600 disabled:opacity-50 flex items-center gap-1"
+                        >
+                            <Pause className="w-4 h-4" />
+                            {isBulkPausing ? 'Pausando...' : 'Pausar Selecionados'}
+                        </button>
+                        <button
+                            onClick={() => api.exportCSV()}
+                            className="px-3 py-1.5 text-sm font-medium border border-gray-300 rounded-md hover:bg-gray-50 flex items-center gap-1"
+                        >
+                            <Download className="w-4 h-4" />
+                            Baixar CSV
+                        </button>
+                    </div>
                 </div>
 
-                {/* Sync Action */}
-                <button
-                    onClick={handleSync}
-                    disabled={isSyncing}
-                    className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 transition-all font-medium text-sm"
-                >
-                    <RefreshCw className={cn("w-4 h-4", isSyncing && "animate-spin")} />
-                    {isSyncing ? 'Sincronizando...' : 'Sincronizar Agora'}
-                </button>
-            </div>
-
-            {/* Bulk Action Bar */}
-            {
-                selectedItems.size > 0 && (
-                    <div className="fixed bottom-16 left-0 right-0 mx-auto w-max z-50 animate-in fade-in slide-in-from-bottom-4 duration-300">
-                        <div className="bg-gray-900 text-white px-6 py-3 rounded-full shadow-xl flex items-center gap-6 border border-gray-800">
-                            <span className="font-medium text-sm">{selectedItems.size} selecionados</span>
-                            <div className="h-4 w-px bg-gray-700" />
-                            <div className="flex gap-2">
+                {/* Filters */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4 pb-4 border-b">
+                    {/* Status Filter */}
+                    <div>
+                        <label className="text-sm font-medium text-gray-600 mb-2 block">Filtrar por Status:</label>
+                        <div className="flex flex-wrap gap-2">
+                            {[
+                                { key: 'all', label: 'Todos' },
+                                { key: 'active', label: 'Ativos' },
+                                { key: 'paused', label: 'Pausados' },
+                                { key: 'no_stock', label: 'Sem Estoque' },
+                                { key: 'closed', label: 'Finalizados' }
+                            ].map(({ key, label }) => (
                                 <button
-                                    onClick={() => handleBulkUpdate('paused')}
-                                    disabled={isBulkUpdating}
-                                    className="flex items-center gap-2 px-3 py-1.5 bg-yellow-600 hover:bg-yellow-700 rounded-md text-xs font-bold uppercase tracking-wider transition-colors disabled:opacity-50"
+                                    key={key}
+                                    onClick={() => {
+                                        setStatusFilter(key as any)
+                                        setCurrentPage(1)
+                                    }}
+                                    className={cn(
+                                        "px-3 py-1 text-sm font-medium rounded-full border transition-colors",
+                                        statusFilter === key
+                                            ? 'bg-blue-600 text-white border-blue-700'
+                                            : 'bg-white text-gray-700 hover:bg-gray-50 border-gray-300'
+                                    )}
                                 >
-                                    <Pause className="w-3 h-3" /> Pausar
+                                    {label}
                                 </button>
-                                <button
-                                    onClick={() => handleBulkUpdate('active')}
-                                    disabled={isBulkUpdating}
-                                    className="flex items-center gap-2 px-3 py-1.5 bg-green-600 hover:bg-green-700 rounded-md text-xs font-bold uppercase tracking-wider transition-colors disabled:opacity-50"
-                                >
-                                    <Play className="w-3 h-3" /> Ativar
-                                </button>
-                            </div>
-                            {isBulkUpdating && <RefreshCw className="w-4 h-4 animate-spin text-gray-400" />}
+                            ))}
                         </div>
                     </div>
-                )
-            }
 
-            {/* Table */}
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+                    {/* Sales Filter */}
+                    <div>
+                        <label htmlFor="sales-filter" className="text-sm font-medium text-gray-600 mb-2 block">
+                            Filtrar por Tempo sem Venda:
+                        </label>
+                        <select
+                            id="sales-filter"
+                            value={salesFilter}
+                            onChange={(e) => {
+                                setSalesFilter(e.target.value as any)
+                                setCurrentPage(1)
+                            }}
+                            className="block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                        >
+                            <option value="all">Qualquer período</option>
+                            <option value="never_sold">Nunca Vendeu</option>
+                            <option value="over_30">Sem venda há +30 dias</option>
+                            <option value="over_60">Sem venda há +60 dias</option>
+                            <option value="over_90">Sem venda há +90 dias</option>
+                        </select>
+                    </div>
+                </div>
+
+                {/* Pagination Controls */}
+                <div className="flex justify-between items-center mb-4">
+                    <div className="flex items-center gap-2 text-sm">
+                        <span>Exibir</span>
+                        <select
+                            value={itemsPerPage}
+                            onChange={(e) => {
+                                setItemsPerPage(Number(e.target.value))
+                                setCurrentPage(1)
+                            }}
+                            className="p-1 border border-gray-300 rounded-md"
+                        >
+                            <option value={100}>100</option>
+                            <option value={200}>200</option>
+                            <option value={500}>500</option>
+                        </select>
+                        <span>por página</span>
+                    </div>
+
+                    {pagination.total_pages > 1 && (
+                        <div className="flex items-center gap-1 text-sm">
+                            <button
+                                onClick={() => setCurrentPage(1)}
+                                disabled={currentPage === 1}
+                                className="px-2 py-1 rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                «
+                            </button>
+                            <button
+                                onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                                disabled={currentPage === 1}
+                                className="px-2 py-1 rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                ‹
+                            </button>
+                            <span className="px-3 py-1">
+                                Página {currentPage} de {pagination.total_pages}
+                            </span>
+                            <button
+                                onClick={() => setCurrentPage(Math.min(pagination.total_pages, currentPage + 1))}
+                                disabled={currentPage >= pagination.total_pages}
+                                className="px-2 py-1 rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                ›
+                            </button>
+                            <button
+                                onClick={() => setCurrentPage(pagination.total_pages)}
+                                disabled={currentPage >= pagination.total_pages}
+                                className="px-2 py-1 rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                »
+                            </button>
+                        </div>
+                    )}
+                </div>
+
+                {/* Table */}
                 <div className="overflow-x-auto">
-                    <table className="w-full text-sm text-left">
-                        <thead className="bg-gray-50 border-b border-gray-200 text-gray-500 font-medium uppercase text-xs">
+                    <table className="min-w-full divide-y divide-gray-200">
+                        <thead className="bg-gray-50">
                             <tr>
-                                <th className="px-4 py-3 w-10">
-                                    <button onClick={toggleSelectAll} className="flex items-center justify-center text-gray-400 hover:text-gray-600">
-                                        {(filteredItems?.length || 0) > 0 && selectedItems.size === (filteredItems?.length || 0) ? <CheckSquare className="w-5 h-5" /> : <Square className="w-5 h-5" />}
-                                    </button>
+                                <th className="px-4 py-3 w-12">
+                                    <input
+                                        type="checkbox"
+                                        checked={selectedItems.size === processedItems.length && processedItems.length > 0}
+                                        onChange={toggleSelectAll}
+                                        className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                                    />
                                 </th>
-                                <th className="px-4 py-3 w-20">Foto</th>
-                                <th className="px-4 py-3">Anúncio</th>
-                                <th className="px-4 py-3 w-32">Logística</th>
-                                <th className="px-4 py-3 w-24 text-center">Vendas</th>
-                                <th className="px-4 py-3 w-24 text-center">Saúde</th>
-                                <th className="px-4 py-3 w-32 text-right">Preço</th>
-                                <th className="px-4 py-3 w-10"></th>
+                                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider">Anúncio</th>
+                                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider">Status</th>
+                                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider">Frete (Médio)</th>
+                                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider">Peso</th>
+                                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider">Visitas</th>
+                                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider">Vendas</th>
+                                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider">Última Venda</th>
+                                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider">Tag de Venda</th>
                             </tr>
                         </thead>
-                        <tbody className="divide-y divide-gray-100">
-                            {filteredItems?.map(item => (
-                                <tr key={item.id} className={cn("transition-colors", getRowClass(item), selectedItems.has(item.ml_id) && "bg-blue-50/50 border-blue-200")}>
-                                    <td className="px-4 py-3">
-                                        <button onClick={() => toggleSelection(item.ml_id)} className={cn("flex items-center justify-center", selectedItems.has(item.ml_id) ? "text-blue-600" : "text-gray-300 hover:text-gray-500")}>
-                                            {selectedItems.has(item.ml_id) ? <CheckSquare className="w-5 h-5" /> : <Square className="w-5 h-5" />}
-                                        </button>
-                                    </td>
-                                    <td className="px-4 py-3">
-                                        <div className="relative group">
-                                            <img
-                                                src={item.secure_thumbnail || item.thumbnail}
-                                                alt=""
-                                                className="w-16 h-16 object-cover rounded-md border border-gray-200 shadow-sm"
-                                            />
-                                        </div>
-                                    </td>
-                                    <td className="px-4 py-3 max-w-md">
-                                        <a href={item.permalink} target="_blank" rel="noreferrer" className="font-medium text-gray-900 hover:underline line-clamp-2 leading-tight" title={item.title}>
-                                            {item.title}
-                                        </a>
-                                        <div className="text-xs text-gray-500 mt-1.5 flex flex-wrap gap-2 items-center">
-                                            <span className="font-mono bg-gray-100 px-1 rounded">{item.ml_id}</span>
-                                            <span className={cn("px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase",
-                                                item.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'
-                                            )}>
-                                                {item.status}
-                                            </span>
-                                            {(item.days_without_sale || 0) > 0 && (
-                                                <span className={cn("text-[10px]",
-                                                    (item.days_without_sale || 0) > 60 ? "text-red-500 font-bold" : "text-gray-400"
-                                                )}>
-                                                    • {item.days_without_sale}d sem venda
-                                                </span>
-                                            )}
-                                        </div>
-                                    </td>
-                                    <td className="px-4 py-3">
-                                        <div className="flex flex-col gap-1 items-start">
-                                            {item.logistic_type === 'fulfillment' && (
-                                                <span className="flex items-center gap-1 px-2 py-1 bg-yellow-100 text-yellow-800 rounded-full text-xs font-bold" title="Full">
-                                                    <Zap className="w-3 h-3 fill-current" /> FULL
-                                                </span>
-                                            )}
-                                            {item.shipping_mode === 'me2' && item.logistic_type !== 'fulfillment' && (
-                                                <span className="flex items-center gap-1 px-2 py-1 bg-blue-50 text-blue-700 rounded-full text-xs font-semibold" title="Mercado Envios">
-                                                    <Truck className="w-3 h-3" /> ME2
-                                                </span>
-                                            )}
-                                            {item.free_shipping && (
-                                                <span className="text-[10px] text-green-600 font-medium px-1">Frete Grátis</span>
-                                            )}
-                                        </div>
-                                    </td>
-                                    <td className="px-4 py-3 text-center">
-                                        <div className="font-bold text-gray-900">{item.sold_quantity}</div>
-                                        <div className="text-[10px] text-gray-400 uppercase">Vendas</div>
-                                    </td>
-                                    <td className="px-4 py-3 text-center">
-                                        <HealthBadge health={item.health} />
-                                    </td>
-                                    <td className="px-4 py-3 text-right">
-                                        <div className="flex flex-col items-end">
-                                            {item.original_price && item.original_price > item.price && (
-                                                <span className="text-xs text-gray-400 line-through">
-                                                    {formatMoney(item.original_price, item.currency_id)}
-                                                </span>
-                                            )}
-                                            <span className={cn("font-bold text-gray-900", item.original_price && item.original_price > item.price ? "text-green-600" : "")}>
-                                                {formatMoney(item.price, item.currency_id)}
-                                            </span>
-                                        </div>
-                                    </td>
-                                    <td className="px-4 py-3 text-right">
-                                        <button className="p-1 hover:bg-black/5 rounded text-gray-400 hover:text-gray-900">
-                                            <MoreHorizontal className="w-4 h-4" />
-                                        </button>
-                                    </td>
-                                </tr>
-                            ))}
-                            {filteredItems?.length === 0 && (
+                        <tbody className="bg-white divide-y divide-gray-200">
+                            {processedItems.length === 0 ? (
                                 <tr>
-                                    <td colSpan={8} className="text-center py-12 text-gray-400">
-                                        Nenhum item encontrado com estes filtros.
+                                    <td colSpan={9} className="text-center py-10 text-gray-500">
+                                        Nenhum anúncio encontrado com os filtros atuais.
                                     </td>
                                 </tr>
+                            ) : (
+                                processedItems.map((item: Item) => {
+                                    const tag = getSaleTag(item)
+                                    return (
+                                        <tr key={item.ml_id}>
+                                            <td className="px-4 py-2">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={selectedItems.has(item.ml_id)}
+                                                    onChange={() => toggleSelection(item.ml_id)}
+                                                    className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                                                />
+                                            </td>
+                                            <td className="px-4 py-2">
+                                                <div className="text-sm font-medium truncate max-w-xs" title={item.title}>
+                                                    {item.title}
+                                                </div>
+                                                <div className="text-xs text-gray-500">{item.ml_id}</div>
+                                            </td>
+                                            <td className="px-4 py-2">
+                                                <span className={cn(
+                                                    "px-2 py-1 text-xs font-semibold rounded-full",
+                                                    item.status === 'active' && 'bg-green-100 text-green-800',
+                                                    item.status === 'paused' && 'bg-yellow-100 text-yellow-800',
+                                                    item.status === 'closed' && 'bg-red-100 text-red-800'
+                                                )}>
+                                                    {item.status}
+                                                </span>
+                                            </td>
+                                            <td className="px-4 py-2 text-sm">
+                                                {item.shipping_cost_nacional
+                                                    ? `R$ ${Number(item.shipping_cost_nacional).toFixed(2)}`
+                                                    : <span className="text-gray-400">-</span>
+                                                }
+                                            </td>
+                                            <td className="px-4 py-2 text-sm">
+                                                <div className="flex items-center gap-1">
+                                                    {item.weight_status === 'good' && <span title="Peso Ideal">🟢</span>}
+                                                    {item.weight_status === 'acceptable' && <span title="Aceitável">🟡</span>}
+                                                    {item.weight_status === 'wrong' && <span title="Peso Incorreto/Alto">🔴</span>}
+                                                    <span className="text-xs text-gray-600">
+                                                        {item.billable_weight ? `${item.billable_weight}g` : '-'}
+                                                    </span>
+                                                </div>
+                                            </td>
+                                            <td className="px-4 py-2 text-sm">
+                                                {item.total_visits?.toLocaleString() || '0'}
+                                            </td>
+                                            <td className="px-4 py-2 text-sm">
+                                                {item.sold_quantity.toLocaleString()}
+                                            </td>
+                                            <td className="px-4 py-2 text-sm">
+                                                {item.last_sale_date
+                                                    ? new Date(item.last_sale_date).toLocaleDateString('pt-BR')
+                                                    : '-'
+                                                }
+                                            </td>
+                                            <td className="px-4 py-2">
+                                                {tag.text && (
+                                                    <span className={cn(
+                                                        "px-2 py-0.5 text-xs font-medium rounded-full",
+                                                        tag.class
+                                                    )}>
+                                                        {tag.text}
+                                                    </span>
+                                                )}
+                                            </td>
+                                        </tr>
+                                    )
+                                })
                             )}
                         </tbody>
                     </table>
                 </div>
-                <div className="px-4 py-3 border-t border-gray-200 bg-gray-50 text-xs text-gray-500">
-                    Mostrando {filteredItems?.length} de {items?.length} itens carregados.
-                </div>
             </div>
-        </div >
-    )
-}
-
-function FilterButton({ active, onClick, label, icon, className }: any) {
-    return (
-        <button
-            onClick={onClick}
-            className={cn(
-                "px-3 py-1.5 rounded-md text-sm font-medium border transition-all flex items-center gap-2",
-                active
-                    ? "bg-gray-900 text-white border-gray-900 shadow-sm"
-                    : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50",
-                className
-            )}
-        >
-            {icon}
-            {label}
-        </button>
+        </div>
     )
 }

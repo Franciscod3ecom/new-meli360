@@ -33,6 +33,47 @@ export const api = {
             throw error;
         }
     },
+    bulkPause: async (itemIds: string[]) => {
+        try {
+            const formData = new FormData();
+            itemIds.forEach(id => formData.append('item_ids[]', id));
+            
+            const response = await fetch(`${BACKEND_URL}/api/bulk_pause.php`, {
+                method: 'POST',
+                body: formData
+            });
+            const data = await response.json();
+            if (!response.ok) throw new Error(data.message || 'Bulk pause failed');
+            return data;
+        } catch (error) {
+            console.error('Bulk pause error:', error);
+            throw error;
+        }
+    },
+    exportCSV: () => {
+        window.location.href = `${BACKEND_URL}/api/export_csv.php`;
+    },
+    getItems: async (params: {
+        page?: number;
+        limit?: number;
+        status_filter?: string;
+        sales_filter?: string;
+    } = {}) => {
+        try {
+            const queryParams = new URLSearchParams();
+            if (params.page) queryParams.append('page', params.page.toString());
+            if (params.limit) queryParams.append('limit', params.limit.toString());
+            if (params.status_filter) queryParams.append('status_filter', params.status_filter);
+            if (params.sales_filter) queryParams.append('sales_filter', params.sales_filter);
+            
+            const response = await fetch(`${BACKEND_URL}/api/get_items.php?${queryParams}`);
+            if (!response.ok) throw new Error('Failed to fetch items');
+            return await response.json();
+        } catch (error) {
+            console.error('Get items error:', error);
+            throw error;
+        }
+    },
     checkAuth: async () => {
         try {
             const response = await fetch(`${BACKEND_URL}/api/me.php`);
