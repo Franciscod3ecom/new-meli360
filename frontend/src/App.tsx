@@ -4,13 +4,15 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { LicenseProvider, useLicense } from './context/LicenseContext'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import Dashboard from './features/analisador/pages/Dashboard'
+import FreightDashboard from './features/analisador/pages/FreightDashboard'
 import AnalyticsDashboard from './features/analisador/pages/AnalyticsDashboard'
 import Login from './features/analisador/pages/Login'
 import LicenseActivation from './features/analisador/pages/LicenseActivation'
 import { AccountSwitcher } from './features/analisador/components/AccountSwitcher'
 import { LogoutButton } from './features/analisador/components/LogoutButton'
+import { SyncStatus } from './features/analisador/components/SyncStatus'
 import { Link, useLocation } from 'react-router-dom'
-import { BarChart3, Package } from 'lucide-react'
+import { BarChart3, Package, Truck } from 'lucide-react'
 import { Toaster } from 'sonner'
 import { cn } from './lib/utils'
 import './App.css'
@@ -70,10 +72,12 @@ function App() {
                           <Routes>
                             <Route path="/" element={<Navigate to="/inventory" replace />} />
                             <Route path="/inventory" element={<Dashboard />} />
+                            <Route path="/freight" element={<FreightDashboard />} />
                             <Route path="/analytics" element={<AnalyticsDashboard />} />
                           </Routes>
                         </main>
                       </div>
+                      <SyncStatus />
                       <Toaster />
                     </div>
                   </ProtectedRoute>
@@ -92,6 +96,7 @@ function Navigation() {
 
   const links = [
     { path: '/inventory', label: 'Inventário', icon: Package },
+    { path: '/freight', label: 'Fretes', icon: Truck },
     { path: '/analytics', label: 'Analytics', icon: BarChart3 }
   ]
 
@@ -121,4 +126,3 @@ function Navigation() {
 }
 
 export default App
-
