@@ -19,16 +19,46 @@ $ml_user_id = $_SESSION['user_id'];
 try {
     $pdo = getDatabaseConnection();
 
-    // Buscar account_id
-    $stmt = $pdo->prepare("SELECT id FROM accounts WHERE ml_user_id = :id LIMIT 1");
-    $stmt->execute([':id' => $ml_user_id]);
-    $account = $stmt->fetch(PDO::FETCH_ASSOC);
+    // Determinar qual conta (account_id UUID) usar
+    $account_id = null;
 
-    if (!$account) {
-        throw new Exception('Conta não encontrada');
+    // Prioridade 1: Conta selecionada na sessão (Login Nativo ou Switch Account)
+    if (!empty($_SESSION['selected_account_id'])) {
+        $account_id = $_SESSION['selected_account_id'];
+    }
+    // Prioridade 2: Fallback para Login OAuth antigo (SESSION['user_id'] = ml_user_id)
+    else {
+        // Verifica se é login nativo sem conta selecionada
+        if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'native') {
+            // Usuário nativo precisa ter selecionado a conta via me.php ou switch_account
+            // Se chegou aqui sem selected_account_id, vamos tentar pegar a primeira vinculada como fallback
+            $stmt = $pdo->prepare("
+                SELECT a.id 
+                FROM accounts a
+                JOIN user_accounts ua ON a.id = ua.account_id
+                WHERE ua.user_id = :user_id
+                ORDER BY a.nickname LIMIT 1
+           ");
+            $stmt->execute([':user_id' => $_SESSION['user_id']]);
+            $acc = $stmt->fetch(PDO::FETCH_ASSOC);
+            if ($acc) {
+                $account_id = $acc['id'];
+                $_SESSION['selected_account_id'] = $account_id; // Salva para próximas
+            }
+        } else {
+            // É Login OAuth (onde user_id é o ml_user_id)
+            $stmt = $pdo->prepare("SELECT id FROM accounts WHERE ml_user_id = :id LIMIT 1");
+            $stmt->execute([':id' => $_SESSION['user_id']]);
+            $acc = $stmt->fetch(PDO::FETCH_ASSOC);
+            if ($acc) {
+                $account_id = $acc['id'];
+            }
+        }
     }
 
-    $account_id = $account['id'];
+    if (!$account_id) {
+        die("Erro: Nenhuma conta selecionada. Por favor, conecte uma conta no painel.");
+    }
 
     // Buscar todos os itens (respeitando filtros se houver)
     $sql = "SELECT 

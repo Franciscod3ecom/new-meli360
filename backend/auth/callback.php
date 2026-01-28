@@ -58,7 +58,7 @@ $expires_at = date('Y-m-d H:i:s', time() + $expires_in);
 
 try {
     $pdo = getDatabaseConnection();
-    
+
     // Get Nickname (Optional, but nice to have)
     // We can fetch user info with the new token
     $userCurl = curl_init("https://api.mercadolibre.com/users/me");
@@ -92,6 +92,7 @@ try {
     $_SESSION['user_id'] = $user_id;
     $_SESSION['nickname'] = $nickname;
     $_SESSION['access_token'] = $access_token;
+    $_SESSION['user_type'] = 'oauth'; // IMPORTANT: Set user_type to oauth so me.php knows how to handle it
 
     // 4. Redirect to Frontend
     $FRONTEND_URL = $config['FRONTEND_URL'] ?: 'http://localhost:5173';

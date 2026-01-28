@@ -19,21 +19,68 @@ if (!isset($_SESSION['user_id'])) {
     exit;
 }
 
-$ml_user_id = $_SESSION['user_id'];
+// Adicionar CORS Headers
+header('Access-Control-Allow-Origin: https://d3ecom.com.br');
+header('Access-Control-Allow-Credentials: true');
+header('Access-Control-Allow-Methods: GET, OPTIONS');
+header('Access-Control-Allow-Headers: Content-Type');
+
+if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+    http_response_code(200);
+    exit;
+}
 
 try {
     $pdo = getDatabaseConnection();
 
-    // Buscar account_id
-    $stmt = $pdo->prepare("SELECT id FROM accounts WHERE ml_user_id = :id LIMIT 1");
-    $stmt->execute([':id' => $ml_user_id]);
-    $account = $stmt->fetch(PDO::FETCH_ASSOC);
+    // Determinar qual conta (account_id UUID) usar
+    $account_id = null;
 
-    if (!$account) {
-        throw new Exception('Conta não encontrada');
+    // Prioridade 1: Conta selecionada na sessão (Login Nativo ou Switch Account)
+    if (!empty($_SESSION['selected_account_id'])) {
+        $sid = $_SESSION['selected_account_id'];
+        // Validate UUID format to prevent SQL errors if session corrupted
+        if (preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i', $sid)) {
+            $account_id = $sid;
+        } else {
+            // Invalid UUID in session -> clear it and fallback
+            unset($_SESSION['selected_account_id']);
+        }
+    }
+    // Prioridade 2: Fallback para Login OAuth antigo (SESSION['user_id'] = ml_user_id)
+    else {
+        // Verifica se é login nativo sem conta selecionada
+        if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'native') {
+            // Usuário nativo precisa ter selecionado a conta via me.php ou switch_account
+            // Se chegou aqui sem selected_account_id, vamos tentar pegar a primeira vinculada como fallback
+            $stmt = $pdo->prepare("
+                SELECT a.id 
+                FROM accounts a
+                JOIN user_accounts ua ON a.id = ua.account_id
+                WHERE ua.user_id = :user_id
+                ORDER BY a.nickname LIMIT 1
+           ");
+            $stmt->execute([':user_id' => $_SESSION['user_id']]);
+            $acc = $stmt->fetch(PDO::FETCH_ASSOC);
+            if ($acc) {
+                $account_id = $acc['id'];
+                $_SESSION['selected_account_id'] = $account_id; // Salva para próximas
+            }
+        } else {
+            // É Login OAuth (onde user_id é o ml_user_id)
+            $stmt = $pdo->prepare("SELECT id FROM accounts WHERE ml_user_id = :id LIMIT 1");
+            $stmt->execute([':id' => $_SESSION['user_id']]);
+            $acc = $stmt->fetch(PDO::FETCH_ASSOC);
+            if ($acc) {
+                $account_id = $acc['id'];
+            }
+        }
     }
 
-    $account_id = $account['id'];
+    if (!$account_id) {
+        http_response_code(400); // Bad Request se não tiver conta
+        throw new Exception('Nenhuma conta do Mercado Livre selecionada ou vinculada.');
+    }
 
     // Parâmetros de paginação
     $page = isset($_GET['page']) && (int) $_GET['page'] > 0 ? (int) $_GET['page'] : 1;

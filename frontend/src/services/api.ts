@@ -2,16 +2,7 @@
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8000';
 
 export const api = {
-    triggerSync: async () => {
-        try {
-            const response = await fetch(`${BACKEND_URL}/cron/sync.php`);
-            if (!response.ok) throw new Error('Sync failed');
-            return true;
-        } catch (error) {
-            console.error('Sync error:', error);
-            return false;
-        }
-    },
+
     getAuthUrl: () => {
         // Redirects to the PHP login script which handles the OAuth redirection
         window.location.href = `${BACKEND_URL}/auth/login.php`;
@@ -37,7 +28,7 @@ export const api = {
         try {
             const formData = new FormData();
             itemIds.forEach(id => formData.append('item_ids[]', id));
-            
+
             const response = await fetch(`${BACKEND_URL}/api/bulk_pause.php`, {
                 method: 'POST',
                 body: formData
@@ -50,9 +41,7 @@ export const api = {
             throw error;
         }
     },
-    exportCSV: () => {
-        window.location.href = `${BACKEND_URL}/api/export_csv.php`;
-    },
+
     getItems: async (params: {
         page?: number;
         limit?: number;
@@ -65,7 +54,7 @@ export const api = {
             if (params.limit) queryParams.append('limit', params.limit.toString());
             if (params.status_filter) queryParams.append('status_filter', params.status_filter);
             if (params.sales_filter) queryParams.append('sales_filter', params.sales_filter);
-            
+
             const response = await fetch(`${BACKEND_URL}/api/get_items.php?${queryParams}`);
             if (!response.ok) throw new Error('Failed to fetch items');
             return await response.json();
@@ -101,7 +90,7 @@ export const api = {
                 headers: {
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({ target_user_id: targetUserId })
+                body: JSON.stringify({ account_id: targetUserId })
             });
             const data = await response.json();
             if (!response.ok) throw new Error(data.error || 'Switch account failed');
@@ -137,11 +126,60 @@ export const api = {
         }
     },
 
-  async getAnalytics() {
-    const res = await fetch(`${BACKEND_URL}/api/analytics.php`, {
-      credentials: 'include'
-    })
-    if (!res.ok) throw new Error('Failed to fetch analytics')
-    return res.json()
-  }
+    getAnalytics: async () => {
+        const res = await fetch(`${BACKEND_URL}/api/analytics.php`, {
+            credentials: 'include'
+        })
+        if (!res.ok) throw new Error('Failed to fetch analytics')
+        return res.json()
+    },
+    register: async (email: string, password: string, confirmPassword: string) => {
+        try {
+            const response = await fetch(`${BACKEND_URL}/auth/register.php`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email, password, confirm_password: confirmPassword })
+            });
+            const data = await response.json();
+            if (!response.ok) throw new Error(data.error || 'Registration failed');
+            return data;
+        } catch (error) {
+            console.error('Registration error:', error);
+            throw error;
+        }
+    },
+    loginNative: async (email: string, password: string) => {
+        try {
+            const response = await fetch(`${BACKEND_URL}/auth/login_native.php`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email, password })
+            });
+            const data = await response.json();
+            if (!response.ok) throw new Error(data.error || 'Login failed');
+            return data;
+        } catch (error) {
+            console.error('Login error:', error);
+            throw error;
+        }
+    },
+    triggerSync: async () => {
+        try {
+            // Chamando o script de sync diretamente (cron/sync.php) temporariamente
+            // O ideal seria criar um wrapper em api/sync.php
+            const response = await fetch(`${BACKEND_URL}/cron/sync.php`, {
+                method: 'GET'
+            });
+            // sync.php geralmente retorna text/plain com logs
+            const text = await response.text();
+            return { success: true, logs: text };
+        } catch (error) {
+            console.error('Sync error:', error);
+            throw error;
+        }
+    },
+    exportCSV: () => {
+        // Redireciona o navegador para download
+        window.open(`${BACKEND_URL}/api/export_csv.php`, '_blank');
+    }
 };

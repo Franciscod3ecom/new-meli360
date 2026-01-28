@@ -84,6 +84,39 @@ export default function Dashboard() {
         return { ...item, days_without_sale: days } as Item
     })
 
+    // Mappers
+    const getShippingModeLabel = (mode: string) => {
+        const map: Record<string, string> = {
+            'me1': 'Envio Próprio',
+            'me2': 'Mercado Envios',
+            'custom': 'Personalizado',
+            'not_specified': 'Não especificado'
+        }
+        return map[mode] || mode || 'Não definido'
+    }
+
+    const getLogisticTypeLabel = (type: string) => {
+        const map: Record<string, string> = {
+            'fulfillment': 'Full',
+            'cross_docking': 'Coleta',
+            'self_service': 'Flex',
+            'drop_off': 'Agência',
+            'xd_drop_off': 'Agência (Coleta)'
+        }
+        return map[type] || type || 'Padrão'
+    }
+
+    // Freight Quality Visual
+    const getFreightQuality = (item: Item) => {
+        if (item.free_shipping) return { label: 'Grátis', color: 'bg-green-100 text-green-800', icon: '🌟' }
+        
+        const cost = item.shipping_cost_nacional || 0
+        if (cost === 0) return { label: 'A Calcular', color: 'bg-gray-100 text-gray-800', icon: '❓' }
+        if (cost < 25) return { label: 'Bom', color: 'bg-green-50 text-green-700', icon: '🙂' }
+        if (cost < 50) return { label: 'Médio', color: 'bg-yellow-50 text-yellow-700', icon: '😐' }
+        return { label: 'Ruim', color: 'bg-red-50 text-red-700', icon: '😟' }
+    }
+
     // Auto-hide alerts
     if (alertMessage) {
         setTimeout(() => setAlertMessage(null), 6000)
@@ -222,10 +255,10 @@ export default function Dashboard() {
                                 <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider">Img</th>
                                 <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider">Anúncio</th>
                                 <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider">Frete (Médio)</th>
+                                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider">Qualidade</th>
                                 <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider">Peso</th>
                                 <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider">Modo</th>
                                 <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider">Logística</th>
-                                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider">Grátis</th>
                                 <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider">Status</th>
                             </tr>
                         </thead>
@@ -238,6 +271,7 @@ export default function Dashboard() {
                                 </tr>
                             ) : (
                                 processedItems.map((item: Item) => {
+                                    const quality = getFreightQuality(item)
                                     return (
                                         <tr key={item.ml_id}>
                                             <td className="px-4 py-2">
@@ -260,6 +294,12 @@ export default function Dashboard() {
                                                 }
                                             </td>
                                             <td className="px-4 py-2 text-sm">
+                                                <span className={cn("px-2 py-0.5 rounded text-xs font-medium flex items-center gap-1 w-fit", quality.color)}>
+                                                    <span>{quality.icon}</span>
+                                                    {quality.label}
+                                                </span>
+                                            </td>
+                                            <td className="px-4 py-2 text-sm">
                                                 <div className="flex items-center gap-1">
                                                     {item.weight_status === 'good' && <span title="Peso Ideal">🟢</span>}
                                                     {item.weight_status === 'acceptable' && <span title="Aceitável">🟡</span>}
@@ -271,19 +311,13 @@ export default function Dashboard() {
                                             </td>
                                             <td className="px-4 py-2 text-sm">
                                                 <span className="px-2 py-0.5 rounded bg-gray-100 text-gray-600 text-xs font-mono">
-                                                    {item.shipping_mode}
+                                                    {getShippingModeLabel(item.shipping_mode)}
                                                 </span>
                                             </td>
                                             <td className="px-4 py-2 text-sm">
                                                 <span className="px-2 py-0.5 rounded bg-blue-50 text-blue-700 text-xs font-medium">
-                                                    {item.logistic_type}
+                                                    {getLogisticTypeLabel(item.logistic_type)}
                                                 </span>
-                                            </td>
-                                            <td className="px-4 py-2 text-sm">
-                                                {item.free_shipping
-                                                    ? <span className="text-green-600 font-bold text-xs">SIM</span>
-                                                    : <span className="text-gray-400 text-xs">NÃO</span>
-                                                }
                                             </td>
                                             <td className="px-4 py-2">
                                                 <span className={cn(

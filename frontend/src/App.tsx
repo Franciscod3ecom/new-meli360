@@ -7,6 +7,7 @@ import Dashboard from './features/analisador/pages/Dashboard'
 import FreightDashboard from './features/analisador/pages/FreightDashboard'
 import AnalyticsDashboard from './features/analisador/pages/AnalyticsDashboard'
 import Login from './features/analisador/pages/Login'
+import Register from './features/analisador/pages/Register'
 import LicenseActivation from './features/analisador/pages/LicenseActivation'
 import { AccountSwitcher } from './features/analisador/components/AccountSwitcher'
 import { LogoutButton } from './features/analisador/components/LogoutButton'
@@ -51,6 +52,7 @@ function App() {
             <BrowserRouter basename={import.meta.env.PROD ? '/meli360' : '/'}>
               <Routes>
                 <Route path="/login" element={<Login />} />
+                <Route path="/register" element={<Register />} />
 
                 <Route path="/*" element={
                   <ProtectedRoute>

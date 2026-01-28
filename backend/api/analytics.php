@@ -3,6 +3,16 @@
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
 header('Content-Type: application/json');
+header('Access-Control-Allow-Origin: https://d3ecom.com.br');
+header('Access-Control-Allow-Credentials: true');
+header('Access-Control-Allow-Methods: GET, OPTIONS');
+header('Access-Control-Allow-Headers: Content-Type');
+
+if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+    http_response_code(200);
+    exit;
+}
+
 session_start();
 
 require_once __DIR__ . '/../config/database.php';
@@ -17,18 +27,46 @@ if (!isset($_SESSION['user_id'])) {
 try {
     $pdo = getDatabaseConnection();
 
-    // Get current account ID
-    $stmt = $pdo->prepare("SELECT id FROM accounts WHERE ml_user_id = :ml_user_id LIMIT 1");
-    $stmt->execute([':ml_user_id' => $_SESSION['user_id']]);
-    $account = $stmt->fetch(PDO::FETCH_ASSOC);
+    // Determinar qual conta (account_id UUID) usar
+    $account_id = null;
 
-    if (!$account) {
-        http_response_code(404);
-        echo json_encode(['error' => 'Account not found']);
-        exit;
+    // Prioridade 1: Conta selecionada na sessão (Login Nativo ou Switch Account)
+    if (!empty($_SESSION['selected_account_id'])) {
+        $account_id = $_SESSION['selected_account_id'];
+    }
+    // Prioridade 2: Fallback para Login OAuth antigo (SESSION['user_id'] = ml_user_id)
+    else {
+        // Verifica se é login nativo sem conta selecionada
+        if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'native') {
+            $stmt = $pdo->prepare("
+                SELECT a.id 
+                FROM accounts a
+                JOIN user_accounts ua ON a.id = ua.account_id
+                WHERE ua.user_id = :user_id
+                ORDER BY a.nickname LIMIT 1
+           ");
+            $stmt->execute([':user_id' => $_SESSION['user_id']]);
+            $acc = $stmt->fetch(PDO::FETCH_ASSOC);
+            if ($acc) {
+                $account_id = $acc['id'];
+                $_SESSION['selected_account_id'] = $account_id;
+            }
+        } else {
+            // É Login OAuth direto
+            $stmt = $pdo->prepare("SELECT id FROM accounts WHERE ml_user_id = :id LIMIT 1");
+            $stmt->execute([':id' => $_SESSION['user_id']]);
+            $acc = $stmt->fetch(PDO::FETCH_ASSOC);
+            if ($acc) {
+                $account_id = $acc['id'];
+            }
+        }
     }
 
-    $account_id = $account['id'];
+    if (!$account_id) {
+        http_response_code(400);
+        echo json_encode(['error' => 'No account selected']);
+        exit;
+    }
 
     // 1. Overview Stats
     $overview = $pdo->prepare("
