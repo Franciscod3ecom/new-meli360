@@ -182,9 +182,15 @@ export default function Dashboard() {
                     <h2 className="text-lg font-semibold">📊 Seus Anúncios ({pagination.total_items})</h2>
                     <div className="flex items-center gap-2">
                         <button
-                            onClick={() => {
-                                api.triggerSync()
-                                toast.success('Sincronização solicitada!')
+                            onClick={async () => {
+                                try {
+                                    toast.loading('Sincronizando...', { id: 'sync-toast' })
+                                    const result = await api.triggerSync()
+                                    toast.success(result.message || 'Sincronização concluída!', { id: 'sync-toast' })
+                                    refetch() // Recarregar dados
+                                } catch (error: any) {
+                                    toast.error(error.message || 'Erro na sincronização', { id: 'sync-toast' })
+                                }
                             }}
                             className="px-3 py-1.5 text-sm font-medium text-blue-700 bg-blue-50 border border-blue-200 rounded-md hover:bg-blue-100 flex items-center gap-1"
                         >

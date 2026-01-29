@@ -165,14 +165,40 @@ export const api = {
     },
     triggerSync: async () => {
         try {
-            // Chamando o script de sync diretamente (cron/sync.php) temporariamente
-            // O ideal seria criar um wrapper em api/sync.php
-            const response = await fetch(`${BACKEND_URL}/cron/sync.php`, {
-                method: 'GET'
-            });
-            // sync.php geralmente retorna text/plain com logs
-            const text = await response.text();
-            return { success: true, logs: text };
+            let offset = 0;
+            let completed = false;
+            let totalProcessed = 0;
+            let totalItems = 0;
+
+            // Loop até processar todos os itens
+            while (!completed) {
+                const response = await fetch(`${BACKEND_URL}/api/sync.php?offset=${offset}`, {
+                    method: 'GET',
+                    credentials: 'include'
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.message || 'Sync failed');
+                }
+
+                const data = await response.json();
+
+                completed = data.completed;
+                totalProcessed = data.processed || 0;
+                totalItems = data.total || 0;
+                offset = totalProcessed;
+
+                // Log progresso
+                console.log(`Sync progress: ${totalProcessed}/${totalItems}`);
+            }
+
+            return {
+                success: true,
+                processed: totalProcessed,
+                total: totalItems,
+                message: `Sincronizados ${totalProcessed} itens com sucesso!`
+            };
         } catch (error) {
             console.error('Sync error:', error);
             throw error;
