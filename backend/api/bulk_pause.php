@@ -40,16 +40,44 @@ if (empty($itemIds) || !is_array($itemIds)) {
 try {
     $pdo = getDatabaseConnection();
 
-    // Buscar token de acesso
-    $stmt = $pdo->prepare("SELECT access_token, refresh_token FROM accounts WHERE ml_user_id = :id LIMIT 1");
-    $stmt->execute([':id' => $ml_user_id]);
+    // Determinar qual conta (account_id UUID) usar
+    $account_id = null;
+    if (!empty($_SESSION['selected_account_id'])) {
+        $account_id = $_SESSION['selected_account_id'];
+    } elseif (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'native') {
+        $stmt = $pdo->prepare("
+            SELECT a.id FROM accounts a
+            JOIN user_accounts ua ON a.id = ua.account_id
+            WHERE ua.user_id = :user_id
+            ORDER BY a.nickname LIMIT 1
+        ");
+        $stmt->execute([':user_id' => $_SESSION['user_id']]);
+        $acc = $stmt->fetch(PDO::FETCH_ASSOC);
+        if ($acc)
+            $account_id = $acc['id'];
+    } else {
+        $stmt = $pdo->prepare("SELECT id FROM accounts WHERE ml_user_id = :id LIMIT 1");
+        $stmt->execute([':id' => $_SESSION['user_id']]);
+        $acc = $stmt->fetch(PDO::FETCH_ASSOC);
+        if ($acc)
+            $account_id = $acc['id'];
+    }
+
+    if (!$account_id) {
+        throw new Exception('Conta não selecionada ou não encontrada');
+    }
+
+    // Buscar tokens da conta
+    $stmt = $pdo->prepare("SELECT access_token, ml_user_id FROM accounts WHERE id = :id LIMIT 1");
+    $stmt->execute([':id' => $account_id]);
     $account = $stmt->fetch(PDO::FETCH_ASSOC);
 
     if (!$account) {
-        throw new Exception('Conta não encontrada');
+        throw new Exception('Dados da conta não encontrados');
     }
 
     $access_token = $account['access_token'];
+    $ml_user_id = $account['ml_user_id'];
 
     // Função helper para pausar um item
     function pauseItem($itemId, $token)

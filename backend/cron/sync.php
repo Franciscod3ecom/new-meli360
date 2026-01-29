@@ -208,7 +208,7 @@ try {
 
     do {
         logAndFlush("Buscando página (Offset: $offset, Limit: $limit)...");
-        $res = requestAPI("/users/$ml_user_id/items/search?status=active&limit=$limit&offset=$offset", $access_token);
+        $res = requestAPI("/users/$ml_user_id/items/search?status=active,paused&limit=$limit&offset=$offset", $access_token);
 
         // Auto-Refresh Logic on 401 (Retry once)
         if ($res['code'] == 401) {
@@ -227,17 +227,17 @@ try {
         // 5. Processing Batch - PREPARE VISITS BATCH
         $idsString = implode(',', $itemsIDs);
 
-        // Batch Visits
+        // Individual Visits (Better reliability than batch for some accounts)
         $dateTo = date('Y-m-d');
-        $dateFrom = date('Y-m-d', strtotime('-5 years'));
-
+        $dateFrom = date('Y-m-d', strtotime('-365 days'));
         $visitsMap = [];
-        $rVisits = requestAPI("/items/visits?ids=$idsString&date_from=$dateFrom&date_to=$dateTo", $access_token);
 
-        if ($rVisits['code'] == 200 && is_array($rVisits['body'])) {
-            foreach ($rVisits['body'] as $visitData) {
-                $visitsMap[$visitData['item_id']] = $visitData['total_visits'] ?? 0;
+        foreach ($itemsIDs as $itemId) {
+            $rVisits = requestAPI("/items/$itemId/visits?date_from=$dateFrom&date_to=$dateTo", $access_token);
+            if ($rVisits['code'] == 200 && isset($rVisits['body']['total_visits'])) {
+                $visitsMap[$itemId] = $rVisits['body']['total_visits'];
             }
+            usleep(50000); // 50ms delay
         }
 
         foreach ($itemsIDs as $itemId) {
@@ -327,6 +327,7 @@ try {
                     currency_id = EXCLUDED.currency_id,
                     total_visits = EXCLUDED.total_visits,
                     last_sale_date = EXCLUDED.last_sale_date,
+                    date_created = COALESCE(items.date_created, EXCLUDED.date_created),
                     category_name = EXCLUDED.category_name,
                     shipping_cost_nacional = EXCLUDED.shipping_cost_nacional,
                     billable_weight = EXCLUDED.billable_weight,
