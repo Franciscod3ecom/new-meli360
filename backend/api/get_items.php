@@ -90,10 +90,17 @@ try {
     // Filtros
     $statusFilter = $_GET['status_filter'] ?? 'all';
     $salesFilter = $_GET['sales_filter'] ?? 'all';
+    $search = $_GET['search'] ?? '';
 
     // Montar SQL base
     $baseSql = "FROM items WHERE account_id = :account_id";
     $params = ['account_id' => $account_id];
+
+    // Aplicar filtro de busca (MLB)
+    if (!empty($search)) {
+        $baseSql .= " AND ml_id LIKE :search";
+        $params['search'] = '%' . $search . '%';
+    }
 
     // Aplicar filtro de status
     switch ($statusFilter) {

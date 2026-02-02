@@ -12,6 +12,7 @@ import LicenseActivation from './features/analisador/pages/LicenseActivation'
 import { AccountSwitcher } from './features/analisador/components/AccountSwitcher'
 import { LogoutButton } from './features/analisador/components/LogoutButton'
 import { SyncStatus } from './features/analisador/components/SyncStatus'
+import { OnboardingGate } from './features/analisador/components/OnboardingGate'
 import { Link, useLocation } from 'react-router-dom'
 import { BarChart3, Package, Truck } from 'lucide-react'
 import { Toaster } from 'sonner'
@@ -71,12 +72,14 @@ function App() {
                         </header>
 
                         <main>
-                          <Routes>
-                            <Route path="/" element={<Navigate to="/inventory" replace />} />
-                            <Route path="/inventory" element={<Dashboard />} />
-                            <Route path="/freight" element={<FreightDashboard />} />
-                            <Route path="/analytics" element={<AnalyticsDashboard />} />
-                          </Routes>
+                          <OnboardingGate>
+                            <Routes>
+                              <Route path="/" element={<Navigate to="/inventory" replace />} />
+                              <Route path="/inventory" element={<Dashboard />} />
+                              <Route path="/freight" element={<FreightDashboard />} />
+                              <Route path="/analytics" element={<AnalyticsDashboard />} />
+                            </Routes>
+                          </OnboardingGate>
                         </main>
                       </div>
                       <SyncStatus />
@@ -99,7 +102,7 @@ function Navigation() {
   const links = [
     { path: '/inventory', label: 'Inventário', icon: Package },
     { path: '/freight', label: 'Fretes', icon: Truck },
-    { path: '/analytics', label: 'Analytics', icon: BarChart3 }
+    { path: '/analytics', label: 'Análise', icon: BarChart3 }
   ]
 
   return (
@@ -114,7 +117,7 @@ function Navigation() {
             className={cn(
               "flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all",
               isActive
-                ? "bg-blue-600 text-white shadow-md"
+                ? "bg-yellow-600 text-white shadow-md"
                 : "bg-white text-gray-600 hover:bg-gray-100 border border-gray-200"
             )}
           >

@@ -87,14 +87,45 @@ try {
         ':expires_at' => $expires_at
     ]);
 
-    // 3. Start Session and Store Data
+    // 3. Gerenciar Vínculo de Conta e Sessão
     session_start();
-    $_SESSION['user_id'] = $user_id;
-    $_SESSION['nickname'] = $nickname;
-    $_SESSION['access_token'] = $access_token;
-    $_SESSION['user_type'] = 'oauth'; // IMPORTANT: Set user_type to oauth so me.php knows how to handle it
 
-    // 4. Redirect to Frontend
+    // Pegar o ID da conta inserida
+    $accountId = $pdo->lastInsertId();
+    if (!$accountId) {
+        // Se já existia, pegar o ID pelo ml_user_id
+        $stmtId = $pdo->prepare("SELECT id FROM accounts WHERE ml_user_id = :ml_id");
+        $stmtId->execute([':ml_id' => $user_id]);
+        $acc = $stmtId->fetch(PDO::FETCH_ASSOC);
+        $accountId = $acc['id'];
+    }
+
+    $isNative = isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'native';
+
+    if ($isNative) {
+        // Se é um usuário logado via e-mail, vinculamos a conta ML a ele
+        $saasUserId = $_SESSION['user_id'];
+
+        $sqlLink = "INSERT INTO user_accounts (user_id, account_id) VALUES (:user_id, :account_id)
+                    ON CONFLICT DO NOTHING";
+        $stmtLink = $pdo->prepare($sqlLink);
+        $stmtLink->execute([
+            ':user_id' => $saasUserId,
+            ':account_id' => $accountId
+        ]);
+
+        // Mantemos a sessão do usuário nativo e definimos a conta selecionada
+        $_SESSION['selected_account_id'] = $accountId;
+    } else {
+        // Login direto via OAuth
+        $_SESSION['user_id'] = $user_id; // Aqui o user_id é o ML_ID para manter compatibilidade com fluxo legado se necessário
+        $_SESSION['nickname'] = $nickname;
+        $_SESSION['access_token'] = $access_token;
+        $_SESSION['user_type'] = 'oauth';
+        $_SESSION['selected_account_id'] = $accountId;
+    }
+
+    // 4. Redirecionar para o Frontend
     $FRONTEND_URL = $config['FRONTEND_URL'] ?: 'http://localhost:5173';
     header("Location: $FRONTEND_URL?auth_success=true");
     exit;

@@ -3,7 +3,7 @@ import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '../../../services/api'
 import { useAuth } from '../../../context/AuthContext'
-import { Download, Pause, RefreshCw, LogOut } from 'lucide-react'
+import { Download, Pause, RefreshCw, LogOut, Search } from 'lucide-react'
 import { cn } from '../../../lib/utils'
 import { toast } from 'sonner'
 
@@ -41,6 +41,7 @@ export default function Dashboard() {
     // State
     const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'paused' | 'no_stock' | 'closed'>('all')
     const [salesFilter, setSalesFilter] = useState<'all' | 'never_sold' | 'over_30' | 'over_60' | 'over_90'>('all')
+    const [searchTerm, setSearchTerm] = useState('')
     const [currentPage, setCurrentPage] = useState(1)
     const [itemsPerPage, setItemsPerPage] = useState(100)
     const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set())
@@ -49,14 +50,15 @@ export default function Dashboard() {
 
     // Query Data
     const { data: response, isLoading, error, refetch } = useQuery({
-        queryKey: ['items', user?.id, currentPage, itemsPerPage, statusFilter, salesFilter],
+        queryKey: ['items', user?.id, currentPage, itemsPerPage, statusFilter, salesFilter, searchTerm],
         queryFn: async () => {
             if (!user?.id) return null
             return await api.getItems({
                 page: currentPage,
                 limit: itemsPerPage,
                 status_filter: statusFilter,
-                sales_filter: salesFilter
+                sales_filter: salesFilter,
+                search: searchTerm
             })
         },
         enabled: !!user?.id
@@ -150,6 +152,17 @@ export default function Dashboard() {
         return { text: `${days} dias s/ venda`, class: 'bg-red-100 text-red-800' }
     }
 
+    // Translation Helper
+    const getStatusLabel = (status: string) => {
+        const map: Record<string, string> = {
+            'active': 'Ativo',
+            'paused': 'Pausado',
+            'closed': 'Finalizado',
+            'no_stock': 'Sem Estoque'
+        }
+        return map[status] || status
+    }
+
     // Auto-hide alerts
     if (alertMessage) {
         setTimeout(() => setAlertMessage(null), 6000)
@@ -210,7 +223,7 @@ export default function Dashboard() {
                             className="px-3 py-1.5 text-sm font-medium border border-gray-300 rounded-md hover:bg-gray-50 flex items-center gap-1"
                         >
                             <Download className="w-4 h-4" />
-                            CSV
+                            Baixar CSV
                         </button>
                         <button
                             onClick={logout}
@@ -223,7 +236,7 @@ export default function Dashboard() {
                 </div>
 
                 {/* Filters */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4 pb-4 border-b">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-4 pb-4 border-b">
                     {/* Status Filter */}
                     <div>
                         <label className="text-sm font-medium text-gray-600 mb-2 block">Filtrar por Status:</label>
@@ -244,7 +257,7 @@ export default function Dashboard() {
                                     className={cn(
                                         "px-3 py-1 text-sm font-medium rounded-full border transition-colors",
                                         statusFilter === key
-                                            ? 'bg-blue-600 text-white border-blue-700'
+                                            ? 'bg-yellow-500 text-white border-yellow-600'
                                             : 'bg-white text-gray-700 hover:bg-gray-50 border-gray-300'
                                     )}
                                 >
@@ -274,6 +287,26 @@ export default function Dashboard() {
                             <option value="over_60">Sem venda há +60 dias</option>
                             <option value="over_90">Sem venda há +90 dias</option>
                         </select>
+                    </div>
+
+                    {/* Search Bar */}
+                    <div>
+                        <label className="text-sm font-medium text-gray-600 mb-2 block">Buscar por MLB:</label>
+                        <div className="relative group">
+                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-blue-500 transition-colors">
+                                <Search className="w-4 h-4" />
+                            </span>
+                            <input
+                                type="text"
+                                placeholder="Ex: MLB4107595224"
+                                value={searchTerm}
+                                onChange={(e) => {
+                                    setSearchTerm(e.target.value.toUpperCase())
+                                    setCurrentPage(1)
+                                }}
+                                className="block w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 transition-all outline-none"
+                            />
+                        </div>
                     </div>
                 </div>
 
@@ -397,7 +430,7 @@ export default function Dashboard() {
                                                     item.status === 'paused' && 'bg-yellow-100 text-yellow-800',
                                                     item.status === 'closed' && 'bg-red-100 text-red-800'
                                                 )}>
-                                                    {item.status}
+                                                    {getStatusLabel(item.status)}
                                                 </span>
                                             </td>
                                             <td className="px-4 py-2 text-sm text-center font-mono">

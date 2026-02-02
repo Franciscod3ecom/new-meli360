@@ -23,10 +23,16 @@ interface AnalyticsData {
         total_sales: number
         total_inventory_value: number
         active_items: number
+        total_visits: number
+        avg_visits: number
+        avg_freight: number
+        free_shipping_count: number
+        conversion_rate: number
     }
     health_distribution: Array<{ health_range: string; count: number }>
     logistics_breakdown: Array<{ logistic_category: string; count: number }>
     status_distribution: Array<{ status: string; count: number }>
+    regional_distribution: Array<{ name: string; value: number }>
     top_performers: Array<{
         ml_id: string
         title: string
@@ -34,6 +40,7 @@ interface AnalyticsData {
         price: number
         secure_thumbnail: string
         health: number
+        total_visits: number
     }>
 }
 
@@ -84,12 +91,12 @@ export default function AnalyticsDashboard() {
     const formatMoney = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value)
 
     // Chart Data Preparation
-    const healthChartData = data.health_distribution.map(item => ({
+    const healthChartData = data.health_distribution.map((item: { health_range: string; count: number }) => ({
         name: item.health_range,
         value: parseInt(item.count.toString())
     }))
 
-    const logisticsChartData = data.logistics_breakdown.map(item => ({
+    const logisticsChartData = data.logistics_breakdown.map((item: { logistic_category: string; count: number }) => ({
         name: item.logistic_category,
         value: parseInt(item.count.toString())
     }))
@@ -106,19 +113,20 @@ export default function AnalyticsDashboard() {
             <div className="bg-gradient-to-r from-yellow-700 to-yellow-400 text-white p-6 rounded-lg shadow-lg">
                 <h1 className="text-3xl font-bold flex items-center gap-3">
                     <TrendingUp className="w-8 h-8" />
-                    Analytics Overview
+                    Análise Profunda
                 </h1>
                 <p className="text-grey-100 mt-2">Insights do seu inventário em tempo real</p>
             </div>
 
             {/* Stats Cards */}
+            {/* Stats Cards - Group 1: Inventory */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 <StatCard
                     icon={<Package className="w-6 h-6" />}
                     title="Total de Itens"
                     value={data.overview.total_items.toString()}
                     subtitle={`${data.overview.active_items} ativos`}
-                    color="yellow"
+                    color="red"
                 />
                 <StatCard
                     icon={<Heart className="w-6 h-6" />}
@@ -128,18 +136,49 @@ export default function AnalyticsDashboard() {
                     color={avgHealthPercent >= 80 ? 'green' : avgHealthPercent >= 60 ? 'blue' : 'red'}
                 />
                 <StatCard
-                    icon={<Award className="w-6 h-6" />}
-                    title="Total Vendas"
-                    value={data.overview.total_sales.toString()}
-                    subtitle="unidades vendidas"
+                    icon={<TrendingUp className="w-6 h-6" />}
+                    title="Visitas Totais"
+                    value={data.overview.total_visits?.toLocaleString() || '0'}
+                    subtitle={`${Math.round(data.overview.avg_visits || 0)} média/item`}
                     color="purple"
                 />
+                <StatCard
+                    icon={<Award className="w-6 h-6" />}
+                    title="Taxa Conversão"
+                    value={`${(data.overview.conversion_rate || 0).toFixed(2)}%`}
+                    subtitle="vendas sobre visitas"
+                    color="yellow"
+                />
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 <StatCard
                     icon={<DollarSign className="w-6 h-6" />}
                     title="Valor Estoque"
                     value={formatMoney(parseFloat((data.overview.total_inventory_value || 0).toString()))}
                     subtitle="valor total disponível"
                     color="green"
+                />
+                <StatCard
+                    icon={<Package className="w-6 h-6" />}
+                    title="Frete Médio"
+                    value={formatMoney(data.overview.avg_freight || 0)}
+                    subtitle="custo nacional"
+                    color="cyan"
+                />
+                <StatCard
+                    icon={<Package className="w-6 h-6" />}
+                    title="Frete Grátis"
+                    value={data.overview.free_shipping_count.toString()}
+                    subtitle="anúncios com frete grátis"
+                    color="orange"
+                />
+                <StatCard
+                    icon={<Award className="w-6 h-6" />}
+                    title="Total Vendas"
+                    value={data.overview.total_sales.toString()}
+                    subtitle="unidades vendidas"
+                    color="pink"
                 />
             </div>
 
@@ -154,13 +193,13 @@ export default function AnalyticsDashboard() {
                     <ResponsiveContainer width="100%" height={300}>
                         <BarChart data={healthChartData}>
                             <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                            <XAxis dataKey="name" tick={{ fontSize: 12 }} />
+                            <XAxis dataKey="name" tick={{ fontSize: 10 }} />
                             <YAxis />
                             <Tooltip
                                 contentStyle={{ backgroundColor: '#fff', border: '1px solid #e5e7eb', borderRadius: '8px' }}
                             />
                             <Bar dataKey="value" fill="#3b82f6" radius={[8, 8, 0, 0]}>
-                                {healthChartData.map((entry, index) => {
+                                {healthChartData.map((entry: { name: string; value: number }, index: number) => {
                                     let color = COLORS.critical
                                     if (entry.name.includes('Excelente')) color = COLORS.excellent
                                     else if (entry.name.includes('Boa')) color = COLORS.good
@@ -170,6 +209,37 @@ export default function AnalyticsDashboard() {
                             </Bar>
                         </BarChart>
                     </ResponsiveContainer>
+                </div>
+
+                {/* Status Distribution */}
+                <div className="bg-white p-6 rounded-lg shadow-md border border-gray-100">
+                    <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+                        <TrendingUp className="w-5 h-5 text-purple-500" />
+                        Status dos Anúncios
+                    </h3>
+                    <ResponsiveContainer width="100%" height={300}>
+                        <PieChart>
+                            <Pie
+                                data={data.status_distribution.map((s: { status: string; count: number }) => ({ name: s.status, value: parseInt(s.count.toString()) }))}
+                                cx="50%"
+                                cy="50%"
+                                innerRadius={60}
+                                outerRadius={100}
+                                paddingAngle={5}
+                                dataKey="value"
+                            >
+                                {data.status_distribution.map((entry: { status: string; count: number }, index: number) => (
+                                    <Cell key={`cell-${index}`} fill={entry.status === 'active' ? COLORS.excellent : entry.status === 'paused' ? COLORS.regular : COLORS.critical} />
+                                ))}
+                            </Pie>
+                            <Tooltip />
+                        </PieChart>
+                    </ResponsiveContainer>
+                    <div className="flex justify-center gap-4 mt-2 text-xs text-gray-600">
+                        <span className="flex items-center gap-1"><div className="w-3 h-3 rounded-full bg-[#10b981]" /> Ativos</span>
+                        <span className="flex items-center gap-1"><div className="w-3 h-3 rounded-full bg-[#f59e0b]" /> Pausados</span>
+                        <span className="flex items-center gap-1"><div className="w-3 h-3 rounded-full bg-[#ef4444]" /> Fechados/Outros</span>
+                    </div>
                 </div>
 
                 {/* Logistics Breakdown */}
@@ -190,12 +260,36 @@ export default function AnalyticsDashboard() {
                                 fill="#8884d8"
                                 dataKey="value"
                             >
-                                {logisticsChartData.map((entry, index) => (
+                                {logisticsChartData.map((entry: { name: string; value: number }, index: number) => (
                                     <Cell key={`cell-${index}`} fill={pieColors(entry.name)} />
                                 ))}
                             </Pie>
                             <Tooltip />
                         </PieChart>
+                    </ResponsiveContainer>
+                </div>
+
+                {/* Regional Freight Chart */}
+                <div className="bg-white p-6 rounded-lg shadow-md border border-gray-100">
+                    <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+                        <DollarSign className="w-5 h-5 text-cyan-500" />
+                        Frete Médio por Região (R$)
+                    </h3>
+                    <ResponsiveContainer width="100%" height={300}>
+                        <BarChart data={data.regional_distribution}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                            <XAxis dataKey="name" tick={{ fontSize: 10 }} />
+                            <YAxis tickFormatter={(val) => `R$${val}`} />
+                            <Tooltip
+                                formatter={(value: number | string | undefined) => [formatMoney(Number(value) || 0), 'Frete Médio']}
+                                contentStyle={{ backgroundColor: '#fff', border: '1px solid #e5e7eb', borderRadius: '8px' }}
+                            />
+                            <Bar dataKey="value" fill="#06b6d4" radius={[8, 8, 0, 0]}>
+                                {data.regional_distribution.map((_, index: number) => (
+                                    <Cell key={`cell-${index}`} fill={['#06b6d4', '#3b82f6', '#10b981', '#f59e0b', '#ef4444'][index % 5]} />
+                                ))}
+                            </Bar>
+                        </BarChart>
                     </ResponsiveContainer>
                 </div>
             </div>
@@ -207,7 +301,7 @@ export default function AnalyticsDashboard() {
                     Top 5 Mais Vendidos
                 </h3>
                 <div className="grid gap-3">
-                    {data.top_performers.map((item, index) => (
+                    {data.top_performers.map((item: any, index: number) => (
                         <div
                             key={item.ml_id}
                             className="flex items-center gap-4 p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
@@ -223,7 +317,7 @@ export default function AnalyticsDashboard() {
                             <div className="flex-1 min-w-0">
                                 <p className="font-semibold text-gray-900 truncate">{item.title}</p>
                                 <p className="text-sm text-gray-500">
-                                    {item.sold_quantity} vendas • {formatMoney(item.price)}
+                                    {item.sold_quantity} vendas • {item.total_visits || 0} visitas • {formatMoney(item.price)}
                                 </p>
                             </div>
                             <div className="text-right">
@@ -249,14 +343,17 @@ function StatCard({ icon, title, value, subtitle, color }: {
     title: string
     value: string
     subtitle: string
-    color: 'blue' | 'green' | 'purple' | 'red' | 'yellow'
+    color: 'blue' | 'green' | 'purple' | 'red' | 'yellow' | 'orange' | 'cyan' | 'pink'
 }) {
     const colorClasses = {
         blue: 'from-blue-500 to-blue-600',
         green: 'from-green-500 to-green-600',
         purple: 'from-purple-500 to-purple-600',
         red: 'from-red-500 to-red-600',
-        yellow: 'from-yellow-500 to-yellow-600'
+        yellow: 'from-yellow-500 to-yellow-600',
+        orange: 'from-orange-500 to-orange-600',
+        cyan: 'from-cyan-500 to-cyan-600',
+        pink: 'from-pink-500 to-pink-600'
     }
 
     return (

@@ -30,6 +30,26 @@ try {
     $pdo->exec($sqlAccounts);
     echo "[OK] Tabela 'accounts' verificada.\n";
 
+    // 2. Tabela SAAS_USERS (Usuários do Sistema)
+    $sqlUsers = "CREATE TABLE IF NOT EXISTS saas_users (
+        id SERIAL PRIMARY KEY,
+        email VARCHAR(255) UNIQUE NOT NULL,
+        password_hash TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW()
+    )";
+    $pdo->exec($sqlUsers);
+    echo "[OK] Tabela 'saas_users' verificada.\n";
+
+    // 3. Tabela USER_ACCOUNTS (Vínculo Usuário <-> Conta ML)
+    $sqlUserAccounts = "CREATE TABLE IF NOT EXISTS user_accounts (
+        user_id INT REFERENCES saas_users(id) ON DELETE CASCADE,
+        account_id INT REFERENCES accounts(id) ON DELETE CASCADE,
+        PRIMARY KEY (user_id, account_id)
+    )";
+    $pdo->exec($sqlUserAccounts);
+    echo "[OK] Tabela 'user_accounts' verificada.\n";
+
     // 2. Tabela ITEMS (Anúncios)
     $sqlItems = "CREATE TABLE IF NOT EXISTS items (
         id SERIAL PRIMARY KEY,
@@ -63,6 +83,12 @@ try {
         freight_manaus DECIMAL(10,2),
         freight_porto_alegre DECIMAL(10,2),
         me2_restrictions TEXT,
+        category_id VARCHAR(50),
+        category_dimensions TEXT,
+        category_logistics TEXT,
+        category_restricted BOOLEAN DEFAULT FALSE,
+        category_last_modified TIMESTAMP,
+        avg_category_freight DECIMAL(10,2),
         updated_at TIMESTAMP DEFAULT NOW()
     )";
     $pdo->exec($sqlItems);
@@ -85,7 +111,13 @@ try {
         "ALTER TABLE items ADD COLUMN IF NOT EXISTS freight_salvador DECIMAL(10,2)",
         "ALTER TABLE items ADD COLUMN IF NOT EXISTS freight_manaus DECIMAL(10,2)",
         "ALTER TABLE items ADD COLUMN IF NOT EXISTS freight_porto_alegre DECIMAL(10,2)",
-        "ALTER TABLE items ADD COLUMN IF NOT EXISTS me2_restrictions TEXT"
+        "ALTER TABLE items ADD COLUMN IF NOT EXISTS me2_restrictions TEXT",
+        "ALTER TABLE items ADD COLUMN IF NOT EXISTS category_id VARCHAR(50)",
+        "ALTER TABLE items ADD COLUMN IF NOT EXISTS category_dimensions TEXT",
+        "ALTER TABLE items ADD COLUMN IF NOT EXISTS category_logistics TEXT",
+        "ALTER TABLE items ADD COLUMN IF NOT EXISTS category_restricted BOOLEAN DEFAULT FALSE",
+        "ALTER TABLE items ADD COLUMN IF NOT EXISTS category_last_modified TIMESTAMP",
+        "ALTER TABLE items ADD COLUMN IF NOT EXISTS avg_category_freight DECIMAL(10,2)"
     ];
 
     foreach ($updates as $sql) {

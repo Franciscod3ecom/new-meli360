@@ -201,26 +201,50 @@ try {
 
     // 4. Processing Items (Pagination Loop)
     $offset = 0;
-    $limit = 50;
+    $limit = 20; // Reduzido ligeiramente para maior estabilidade
     $totalProcessed = 0;
 
     logAndFlush("Iniciando sincronização completa...");
 
+    // Obter totais para determinar quando mudar de status
+    $resActiveCount = requestAPI("/users/$ml_user_id/items/search?status=active&limit=0", $access_token);
+    $resPausedCount = requestAPI("/users/$ml_user_id/items/search?status=paused&limit=0", $access_token);
+
+    $totalActive = $resActiveCount['body']['paging']['total'] ?? 0;
+    $totalPaused = $resPausedCount['body']['paging']['total'] ?? 0;
+    $totalCombined = $totalActive + $totalPaused;
+
+    logAndFlush("Total Ativos: $totalActive, Total Pausados: $totalPaused");
+
     do {
-        logAndFlush("Buscando página (Offset: $offset, Limit: $limit)...");
-        $res = requestAPI("/users/$ml_user_id/items/search?status=active,paused&limit=$limit&offset=$offset", $access_token);
+        // Decidir qual status buscar com base no offset global
+        if ($offset < $totalActive) {
+            $currentStatus = "active";
+            $searchOffset = $offset;
+        } else {
+            $currentStatus = "paused";
+            $searchOffset = $offset - $totalActive;
+        }
+
+        logAndFlush("Buscando status $currentStatus (Offset: $searchOffset, Global: $offset)...");
+        $res = requestAPI("/users/$ml_user_id/items/search?status=$currentStatus&limit=$limit&offset=$searchOffset", $access_token);
 
         // Auto-Refresh Logic on 401 (Retry once)
         if ($res['code'] == 401) {
             $access_token = doRefresh($pdo, $refresh_token, $APP_ID, $SECRET_KEY, $ml_user_id);
             if (!$access_token)
                 die("Falha fatal de autenticação.\n");
-            $res = requestAPI("/users/$ml_user_id/items/search?status=active&limit=$limit&offset=$offset", $access_token);
+            $res = requestAPI("/users/$ml_user_id/items/search?status=$currentStatus&limit=$limit&offset=$searchOffset", $access_token);
         }
 
         $itemsIDs = $res['body']['results'] ?? [];
         if (empty($itemsIDs)) {
-            break; // No more items
+            // Se atingiu o fim de um status e ainda tem o outro, continua
+            if ($offset < $totalActive && $totalPaused > 0) {
+                $offset = $totalActive;
+                continue;
+            }
+            break;
         }
 
         // Processing Batch
@@ -328,16 +352,16 @@ try {
                     total_visits = EXCLUDED.total_visits,
                     last_sale_date = EXCLUDED.last_sale_date,
                     date_created = COALESCE(items.date_created, EXCLUDED.date_created),
-                    category_name = EXCLUDED.category_name,
-                    shipping_cost_nacional = EXCLUDED.shipping_cost_nacional,
-                    billable_weight = EXCLUDED.billable_weight,
-                    weight_status = EXCLUDED.weight_status,
-                    freight_brasilia = EXCLUDED.freight_brasilia,
-                    freight_sao_paulo = EXCLUDED.freight_sao_paulo,
-                    freight_salvador = EXCLUDED.freight_salvador,
-                    freight_manaus = EXCLUDED.freight_manaus,
-                    freight_porto_alegre = EXCLUDED.freight_porto_alegre,
-                    me2_restrictions = EXCLUDED.me2_restrictions,
+                    category_name = COALESCE(EXCLUDED.category_name, items.category_name),
+                    shipping_cost_nacional = COALESCE(EXCLUDED.shipping_cost_nacional, items.shipping_cost_nacional),
+                    billable_weight = COALESCE(EXCLUDED.billable_weight, items.billable_weight),
+                    weight_status = COALESCE(EXCLUDED.weight_status, items.weight_status),
+                    freight_brasilia = COALESCE(EXCLUDED.freight_brasilia, items.freight_brasilia),
+                    freight_sao_paulo = COALESCE(EXCLUDED.freight_sao_paulo, items.freight_sao_paulo),
+                    freight_salvador = COALESCE(EXCLUDED.freight_salvador, items.freight_salvador),
+                    freight_manaus = COALESCE(EXCLUDED.freight_manaus, items.freight_manaus),
+                    freight_porto_alegre = COALESCE(EXCLUDED.freight_porto_alegre, items.freight_porto_alegre),
+                    me2_restrictions = COALESCE(EXCLUDED.me2_restrictions, items.me2_restrictions),
                     updated_at = NOW()";
 
                 $stmt = $pdo->prepare($sql);

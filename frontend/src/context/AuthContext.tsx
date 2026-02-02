@@ -3,9 +3,12 @@ import { api } from '../services/api'
 import { toast } from 'sonner'
 
 interface User {
-    id?: string
-    ml_user_id: string
-    nickname: string
+    id?: string | null
+    ml_user_id?: string
+    nickname?: string
+    email?: string
+    user_id?: string
+    needs_account_link?: boolean
 }
 
 interface Account {
@@ -40,7 +43,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             const sessionData = await api.checkAuth()
 
             if (sessionData.authenticated && sessionData.user) {
-                setUser(sessionData.user)
+                const userData = sessionData.user
+                setUser(userData)
                 setIsAuthenticated(true)
 
                 // 2. Fetch available accounts if authenticated

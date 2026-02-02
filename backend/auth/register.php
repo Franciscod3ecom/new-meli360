@@ -72,10 +72,20 @@ try {
     $stmtInsert->execute([':email' => $email, ':pwd' => $passwordHash]);
     $userId = $pdo->lastInsertId();
 
-    // Auto-login (iniciar sessão)
+    // Limpar qualquer sessão anterior para evitar vazamento de dados
+    if (session_status() === PHP_SESSION_NONE) {
+        session_start();
+    }
+    session_unset();
+    session_destroy();
+
+    // Iniciar sessão limpa
     session_start();
+    session_regenerate_id(true);
+
     $_SESSION['user_id'] = $userId;
     $_SESSION['email'] = $email;
+    $_SESSION['user_type'] = 'native';
 
     echo json_encode([
         'success' => true,

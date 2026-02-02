@@ -72,15 +72,38 @@ try {
     $overview = $pdo->prepare("
         SELECT 
             COUNT(*) as total_items,
-            AVG(health) as avg_health,
-            SUM(sold_quantity) as total_sales,
-            SUM(price * available_quantity) as total_inventory_value,
-            COUNT(CASE WHEN status = 'active' THEN 1 END) as active_items
+            COALESCE(AVG(health), 0) as avg_health,
+            COALESCE(SUM(sold_quantity), 0) as total_sales,
+            COALESCE(SUM(price * available_quantity), 0) as total_inventory_value,
+            COUNT(CASE WHEN status = 'active' THEN 1 END) as active_items,
+            COALESCE(SUM(total_visits), 0) as total_visits,
+            COALESCE(AVG(total_visits), 0) as avg_visits,
+            COALESCE(AVG(shipping_cost_nacional), 0) as avg_freight,
+            COUNT(CASE WHEN free_shipping IS TRUE THEN 1 END) as free_shipping_count
         FROM items 
         WHERE account_id = :account_id
     ");
     $overview->execute([':account_id' => $account_id]);
     $stats = $overview->fetch(PDO::FETCH_ASSOC);
+
+    if (!$stats) {
+        $stats = [
+            'total_items' => 0,
+            'avg_health' => 0,
+            'total_sales' => 0,
+            'total_inventory_value' => 0,
+            'active_items' => 0,
+            'total_visits' => 0,
+            'avg_visits' => 0,
+            'avg_freight' => 0,
+            'free_shipping_count' => 0
+        ];
+    }
+
+    // Calculate conversion rate (defensive)
+    $totalVisits = (float) ($stats['total_visits'] ?? 0);
+    $totalSales = (float) ($stats['total_sales'] ?? 0);
+    $stats['conversion_rate'] = ($totalVisits > 0) ? ($totalSales / $totalVisits) * 100 : 0;
 
     // 2. Health Distribution
     $healthDist = $pdo->prepare("
@@ -126,9 +149,49 @@ try {
     $statusDist->execute([':account_id' => $account_id]);
     $statusData = $statusDist->fetchAll(PDO::FETCH_ASSOC);
 
-    // 5. Top 5 Performers
+    // 5. Regional Freight Averages
+    $regionalFreight = $pdo->prepare("
+        SELECT 
+            COALESCE(AVG(freight_brasilia), 0) as brasilia,
+            COALESCE(AVG(freight_sao_paulo), 0) as sao_paulo,
+            COALESCE(AVG(freight_salvador), 0) as salvador,
+            COALESCE(AVG(freight_manaus), 0) as manaus,
+            COALESCE(AVG(freight_porto_alegre), 0) as porto_alegre
+        FROM items 
+        WHERE account_id = :account_id
+    ");
+    $regionalFreight->execute([':account_id' => $account_id]);
+    $regionalDataArr = $regionalFreight->fetch(PDO::FETCH_ASSOC);
+
+    // Format for chart
+    $regionalData = [
+        ['name' => 'Brasília', 'value' => (float) $regionalDataArr['brasilia']],
+        ['name' => 'São Paulo', 'value' => (float) $regionalDataArr['sao_paulo']],
+        ['name' => 'Salvador', 'value' => (float) $regionalDataArr['salvador']],
+        ['name' => 'Manaus', 'value' => (float) $regionalDataArr['manaus']],
+        ['name' => 'Porto Alegre', 'value' => (float) $regionalDataArr['porto_alegre']],
+    ];
+
+    // 6. Sales Recency Distribution
+    $recencyDist = $pdo->prepare("
+        SELECT 
+            CASE 
+                WHEN last_sale_date >= NOW() - INTERVAL '7 days' THEN '7 Dias'
+                WHEN last_sale_date >= NOW() - INTERVAL '30 days' THEN '30 Dias'
+                WHEN last_sale_date IS NOT NULL THEN '+30 Dias'
+                ELSE 'Sem Vendas'
+            END as recency_range,
+            COUNT(*) as count
+        FROM items 
+        WHERE account_id = :account_id
+        GROUP BY recency_range
+    ");
+    $recencyDist->execute([':account_id' => $account_id]);
+    $recencyData = $recencyDist->fetchAll(PDO::FETCH_ASSOC);
+
+    // 6. Top 5 Performers
     $topItems = $pdo->prepare("
-        SELECT ml_id, title, sold_quantity, price, secure_thumbnail, health
+        SELECT ml_id, title, sold_quantity, price, secure_thumbnail, health, total_visits
         FROM items 
         WHERE account_id = :account_id
         ORDER BY sold_quantity DESC
@@ -143,10 +206,15 @@ try {
         'health_distribution' => $healthData,
         'logistics_breakdown' => $logisticsData,
         'status_distribution' => $statusData,
+        'recency_distribution' => $recencyData,
+        'regional_distribution' => $regionalData,
         'top_performers' => $topPerformers
     ]);
 
 } catch (Exception $e) {
+    // Log error to file for debugging
+    error_log("[" . date('Y-m-d H:i:s') . "] Analytics Error: " . $e->getMessage() . "\n", 3, __DIR__ . "/error_log.txt");
+
     http_response_code(500);
     echo json_encode(['error' => $e->getMessage()]);
 }

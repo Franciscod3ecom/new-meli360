@@ -47,6 +47,7 @@ export const api = {
         limit?: number;
         status_filter?: string;
         sales_filter?: string;
+        search?: string;
     } = {}) => {
         try {
             const queryParams = new URLSearchParams();
@@ -54,6 +55,7 @@ export const api = {
             if (params.limit) queryParams.append('limit', params.limit.toString());
             if (params.status_filter) queryParams.append('status_filter', params.status_filter);
             if (params.sales_filter) queryParams.append('sales_filter', params.sales_filter);
+            if (params.search) queryParams.append('search', params.search);
 
             const response = await fetch(`${BACKEND_URL}/api/get_items.php?${queryParams}`);
             if (!response.ok) throw new Error('Failed to fetch items');
@@ -203,6 +205,25 @@ export const api = {
             console.error('Sync error:', error);
             throw error;
         }
+    },
+    runSync: async (offset: number = 0) => {
+        const response = await fetch(`${BACKEND_URL}/api/sync.php?offset=${offset}`, {
+            method: 'GET',
+            credentials: 'include'
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json();
+            return { success: false, message: errorData.message || 'Sync failed' };
+        }
+
+        const data = await response.json();
+        return {
+            success: true,
+            completed: data.completed,
+            processed: data.processed,
+            total: data.total
+        };
     },
     exportCSV: () => {
         // Redireciona o navegador para download
