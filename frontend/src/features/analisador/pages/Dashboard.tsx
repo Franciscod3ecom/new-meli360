@@ -1,9 +1,9 @@
 
-import { useState } from 'react'
+import React, { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '../../../services/api'
 import { useAuth } from '../../../context/AuthContext'
-import { Download, Pause, RefreshCw, LogOut, Search } from 'lucide-react'
+import { Download, Pause, RefreshCw, LogOut, Search, ChevronRight, ChevronDown, Package, Activity, Info, AlertTriangle } from 'lucide-react'
 import { cn } from '../../../lib/utils'
 import { toast } from 'sonner'
 
@@ -33,6 +33,19 @@ interface Item {
     shipping_cost_nacional?: number
     billable_weight?: number
     weight_status?: string
+    freight_brasilia?: number
+    freight_sao_paulo?: number
+    freight_salvador?: number
+    freight_manaus?: number
+    freight_porto_alegre?: number
+    me2_restrictions?: string
+    category_id?: string
+    category_dimensions?: string
+    category_logistics?: string
+    category_restricted?: boolean
+    category_last_modified?: string
+    avg_category_freight?: number
+    catalog_listing?: boolean
 }
 
 export default function Dashboard() {
@@ -45,6 +58,7 @@ export default function Dashboard() {
     const [currentPage, setCurrentPage] = useState(1)
     const [itemsPerPage, setItemsPerPage] = useState(100)
     const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set())
+    const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set())
     const [isBulkPausing, setIsBulkPausing] = useState(false)
     const [alertMessage, setAlertMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
 
@@ -133,6 +147,16 @@ export default function Dashboard() {
         }
     }
 
+    const toggleExpand = (id: string) => {
+        const newExpanded = new Set(expandedItems)
+        if (newExpanded.has(id)) {
+            newExpanded.delete(id)
+        } else {
+            newExpanded.add(id)
+        }
+        setExpandedItems(newExpanded)
+    }
+
     // Sale Tag Helper
     const getSaleTag = (item: Item) => {
         const days = item.days_without_sale || 0
@@ -161,6 +185,35 @@ export default function Dashboard() {
             'no_stock': 'Sem Estoque'
         }
         return map[status] || status
+    }
+
+    const getShippingModeLabel = (mode: string) => {
+        const map: Record<string, string> = {
+            'me1': 'Envio Próprio',
+            'me2': 'Mercado Envios',
+            'custom': 'Personalizado',
+            'not_specified': 'Não especificado'
+        }
+        return map[mode] || mode || 'Não definido'
+    }
+
+    const getLogisticTypeLabel = (type: string) => {
+        const map: Record<string, string> = {
+            'fulfillment': 'Full',
+            'cross_docking': 'Coleta',
+            'self_service': 'Flex',
+            'drop_off': 'Agência',
+            'xd_drop_off': 'Agência (Coleta)'
+        }
+        return map[type] || type || 'Padrão'
+    }
+
+
+    const formatCurrency = (val?: number) => val ? `R$ ${Number(val).toFixed(2)}` : '-'
+
+    const parseJSON = (str?: string) => {
+        if (!str) return null
+        try { return JSON.parse(str) } catch (e) { return null }
     }
 
     // Auto-hide alerts
@@ -379,6 +432,7 @@ export default function Dashboard() {
                                         className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
                                     />
                                 </th>
+                                <th className="px-4 py-3 w-8"></th>
                                 <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider">Img</th>
                                 <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider">Anúncio</th>
                                 <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider">Status</th>
@@ -400,68 +454,217 @@ export default function Dashboard() {
                             ) : (
                                 processedItems.map((item: Item) => {
                                     const tag = getSaleTag(item)
+                                    const isExpanded = expandedItems.has(item.ml_id)
+                                    const dims = parseJSON(item.category_dimensions)
+
+                                    let weightColor = 'text-gray-400'
+                                    if (item.weight_status?.includes('bom')) weightColor = 'text-green-600 bg-green-50'
+                                    if (item.weight_status?.includes('aceitável')) weightColor = 'text-yellow-600 bg-yellow-50'
+                                    if (item.weight_status?.includes('errado')) weightColor = 'text-red-600 bg-red-50'
+
                                     return (
-                                        <tr key={item.ml_id}>
-                                            <td className="px-4 py-2">
-                                                <input
-                                                    type="checkbox"
-                                                    checked={selectedItems.has(item.ml_id)}
-                                                    onChange={() => toggleSelection(item.ml_id)}
-                                                    className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                                                />
-                                            </td>
-                                            <td className="px-4 py-2">
-                                                <img
-                                                    src={item.secure_thumbnail || item.thumbnail}
-                                                    alt=""
-                                                    className="w-12 h-12 object-contain rounded border border-gray-100"
-                                                />
-                                            </td>
-                                            <td className="px-4 py-2">
-                                                <div className="text-sm font-medium truncate max-w-xs" title={item.title}>
-                                                    {item.title}
-                                                </div>
-                                                <div className="text-xs text-gray-500">{item.ml_id}</div>
-                                            </td>
-                                            <td className="px-4 py-2">
-                                                <span className={cn(
-                                                    "px-2 py-1 text-xs font-semibold rounded-full",
-                                                    item.status === 'active' && 'bg-green-100 text-green-800',
-                                                    item.status === 'paused' && 'bg-yellow-100 text-yellow-800',
-                                                    item.status === 'closed' && 'bg-red-100 text-red-800'
-                                                )}>
-                                                    {getStatusLabel(item.status)}
-                                                </span>
-                                            </td>
-                                            <td className="px-4 py-2 text-sm text-center font-mono">
-                                                {item.available_quantity.toLocaleString()}
-                                            </td>
-                                            <td className="px-4 py-2 text-sm">
-                                                {item.date_created ? new Date(item.date_created).toLocaleDateString('pt-BR') : '-'}
-                                            </td>
-                                            <td className="px-4 py-2 text-sm">
-                                                {item.total_visits?.toLocaleString() || '0'}
-                                            </td>
-                                            <td className="px-4 py-2 text-sm">
-                                                {item.sold_quantity.toLocaleString()}
-                                            </td>
-                                            <td className="px-4 py-2 text-sm">
-                                                {item.last_sale_date
-                                                    ? new Date(item.last_sale_date).toLocaleDateString('pt-BR')
-                                                    : '-'
-                                                }
-                                            </td>
-                                            <td className="px-4 py-2">
-                                                {tag.text && (
+                                        <React.Fragment key={item.ml_id}>
+                                            <tr className={cn("hover:bg-gray-50 transition-colors", isExpanded && "bg-blue-50/30")}>
+                                                <td className="px-4 py-2">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={selectedItems.has(item.ml_id)}
+                                                        onChange={() => toggleSelection(item.ml_id)}
+                                                        className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                                                    />
+                                                </td>
+                                                <td className="px-4 py-2">
+                                                    <button
+                                                        onClick={() => toggleExpand(item.ml_id)}
+                                                        className="p-1 hover:bg-gray-200 rounded-md transition-colors text-gray-400"
+                                                        title="Ver detalhes de frete"
+                                                    >
+                                                        {isExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                                                    </button>
+                                                </td>
+                                                <td className="px-4 py-2">
+                                                    <img
+                                                        src={item.secure_thumbnail || item.thumbnail}
+                                                        alt=""
+                                                        className="w-12 h-12 object-contain rounded border border-gray-100"
+                                                    />
+                                                </td>
+                                                <td className="px-4 py-2">
+                                                    <div className="text-sm font-medium truncate max-w-xs" title={item.title}>
+                                                        {item.title}
+                                                    </div>
+                                                    <div className="flex items-center gap-1.5 mt-0.5">
+                                                        <span className="text-[10px] text-gray-500 font-mono">{item.ml_id}</span>
+                                                        {item.catalog_listing && (
+                                                            <span className="bg-blue-600 text-white text-[8px] font-bold px-1 rounded shadow-sm">CAT</span>
+                                                        )}
+                                                    </div>
+                                                </td>
+                                                <td className="px-4 py-2">
                                                     <span className={cn(
-                                                        "px-2 py-0.5 text-xs font-medium rounded-full",
-                                                        tag.class
+                                                        "px-2 py-1 text-xs font-semibold rounded-full",
+                                                        item.status === 'active' && 'bg-green-100 text-green-800',
+                                                        item.status === 'paused' && 'bg-yellow-100 text-yellow-800',
+                                                        item.status === 'closed' && 'bg-red-100 text-red-800'
                                                     )}>
-                                                        {tag.text}
+                                                        {getStatusLabel(item.status)}
                                                     </span>
-                                                )}
-                                            </td>
-                                        </tr>
+                                                </td>
+                                                <td className="px-4 py-2 text-sm text-center font-mono">
+                                                    {item.available_quantity.toLocaleString()}
+                                                </td>
+                                                <td className="px-4 py-2 text-sm">
+                                                    {item.date_created ? new Date(item.date_created).toLocaleDateString('pt-BR') : '-'}
+                                                </td>
+                                                <td className="px-4 py-2 text-sm">
+                                                    {item.total_visits?.toLocaleString() || '0'}
+                                                </td>
+                                                <td className="px-4 py-2 text-sm">
+                                                    {item.sold_quantity.toLocaleString()}
+                                                </td>
+                                                <td className="px-4 py-2 text-sm">
+                                                    {item.last_sale_date
+                                                        ? new Date(item.last_sale_date).toLocaleDateString('pt-BR')
+                                                        : '-'
+                                                    }
+                                                </td>
+                                                <td className="px-4 py-2">
+                                                    {tag.text && (
+                                                        <span className={cn(
+                                                            "px-2 py-0.5 text-xs font-medium rounded-full",
+                                                            tag.class
+                                                        )}>
+                                                            {tag.text}
+                                                        </span>
+                                                    )}
+                                                </td>
+                                            </tr>
+                                            {isExpanded && (
+                                                <tr className="bg-gray-50/50">
+                                                    <td colSpan={11} className="px-6 py-4 border-l-4 border-blue-500">
+                                                        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                                                            {/* Col 1: Dimensions & Category */}
+                                                            <div>
+                                                                <h4 className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2 flex items-center gap-1">
+                                                                    <Package className="w-3 h-3" /> Categoria e Dimensões
+                                                                </h4>
+                                                                <div className="text-sm font-semibold text-gray-700">{item.category_name || 'N/A'}</div>
+                                                                {dims && typeof dims === 'object' && (dims.height || dims.width || dims.length || dims.weight) ? (
+                                                                    <div className="text-[11px] text-gray-500 mt-2 space-y-1">
+                                                                        <div className="flex items-center gap-1.5">
+                                                                            <span className="text-blue-500">📏</span>
+                                                                            <span>{dims.height}x{dims.width}x{dims.length}cm</span>
+                                                                        </div>
+                                                                        <div className="flex items-center gap-1.5">
+                                                                            <span className="text-orange-500">⚖️</span>
+                                                                            <span>{dims.weight}g</span>
+                                                                        </div>
+                                                                    </div>
+                                                                ) : (
+                                                                    <div className="mt-1 text-[10px] text-gray-400 italic">Dimensões não vinculadas</div>
+                                                                )}
+                                                            </div>
+
+                                                            {/* Col 2: Quality & Rules */}
+                                                            <div>
+                                                                <h4 className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2 flex items-center gap-1">
+                                                                    <Activity className="w-3 h-3" /> Qualidade e Regras
+                                                                </h4>
+                                                                <div className="space-y-3">
+                                                                    <div>
+                                                                        <div className="flex justify-between items-center mb-1">
+                                                                            <span className="text-[10px] text-gray-500 font-medium uppercase">Saúde do Anúncio</span>
+                                                                            <span className="text-xs font-bold text-gray-700">{item.health ? Math.round(item.health * 100) : 0}%</span>
+                                                                        </div>
+                                                                        <div className="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden border border-gray-200">
+                                                                            <div
+                                                                                className={cn(
+                                                                                    "h-full transition-all",
+                                                                                    (item.health || 0) > 0.8 ? "bg-green-500" : (item.health || 0) > 0.5 ? "bg-yellow-500" : "bg-red-500"
+                                                                                )}
+                                                                                style={{ width: `${(item.health || 0) * 100}%` }}
+                                                                            />
+                                                                        </div>
+                                                                    </div>
+                                                                    <div className="pt-2 border-t border-gray-50">
+                                                                        <div className="text-[9px] text-gray-400 uppercase font-bold leading-tight">Última Alteração de Regras</div>
+                                                                        <div className="text-xs font-semibold text-gray-700 mt-0.5">
+                                                                            {item.category_last_modified ? new Date(item.category_last_modified).toLocaleDateString('pt-BR') : 'Não disponível'}
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+
+                                                            {/* Col 3: Weight Status */}
+                                                            <div>
+                                                                <h4 className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2 flex items-center gap-1">
+                                                                    <Activity className="w-3 h-3" /> Status do Peso
+                                                                </h4>
+                                                                <div className={cn("p-2 rounded-lg border text-[11px] font-medium", weightColor)}>
+                                                                    {item.weight_status?.replace(/[🟢🔴]/g, '') || 'N/A'}
+                                                                    <div className="mt-1 text-[10px] opacity-70 border-t border-current/10 pt-1">
+                                                                        Peso faturável: {item.billable_weight ? Number(item.billable_weight).toFixed(0) : 0}g
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+
+                                                            {/* Col 4: Regional Costs */}
+                                                            <div>
+                                                                <h4 className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2 flex items-center gap-1">
+                                                                    <Info className="w-3 h-3" /> Fretes Regionais
+                                                                </h4>
+                                                                <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-[10px]">
+                                                                    <div className="flex justify-between border-b border-gray-100 pb-0.5">
+                                                                        <span className="text-gray-400">Brasília</span>
+                                                                        <span className="font-medium text-gray-600">{formatCurrency(item.freight_brasilia)}</span>
+                                                                    </div>
+                                                                    <div className="flex justify-between border-b border-gray-100 pb-0.5">
+                                                                        <span className="text-gray-400">São Paulo</span>
+                                                                        <span className="font-medium text-gray-600">{formatCurrency(item.freight_sao_paulo)}</span>
+                                                                    </div>
+                                                                    <div className="flex justify-between border-b border-gray-100 pb-0.5">
+                                                                        <span className="text-gray-400">Salvador</span>
+                                                                        <span className="font-medium text-gray-600">{formatCurrency(item.freight_salvador)}</span>
+                                                                    </div>
+                                                                    <div className="flex justify-between border-b border-gray-100 pb-0.5">
+                                                                        <span className="text-gray-400">Manaus</span>
+                                                                        <span className="font-medium text-gray-600">{formatCurrency(item.freight_manaus)}</span>
+                                                                    </div>
+                                                                    <div className="flex justify-between border-b border-gray-100 pb-0.5">
+                                                                        <span className="text-gray-400">Porto Alegre</span>
+                                                                        <span className="font-medium text-gray-600">{formatCurrency(item.freight_porto_alegre)}</span>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+
+                                                        {/* Bottom Tags */}
+                                                        <div className="mt-4 flex flex-wrap gap-2 pt-3 border-t border-gray-100">
+                                                            <span className="text-[10px] font-bold text-gray-400 uppercase mr-1">Tags:</span>
+                                                            <span className="px-2 py-0.5 bg-blue-50 text-blue-700 text-[10px] font-bold rounded border border-blue-100 uppercase">
+                                                                {getLogisticTypeLabel(item.logistic_type)}
+                                                            </span>
+                                                            <span className="px-2 py-0.5 bg-gray-100 text-gray-600 text-[10px] font-bold rounded border border-gray-200 uppercase">
+                                                                {getShippingModeLabel(item.shipping_mode)}
+                                                            </span>
+                                                            {item.free_shipping && (
+                                                                <span className="px-2 py-0.5 bg-green-500 text-white text-[10px] font-bold rounded shadow-sm uppercase">FRETE GRÁTIS</span>
+                                                            )}
+                                                            {item.category_restricted && (
+                                                                <span className="px-2 py-0.5 bg-red-600 text-white text-[10px] font-bold rounded shadow-sm uppercase flex items-center gap-1">
+                                                                    <AlertTriangle className="w-3 h-3" /> RESTRITO
+                                                                </span>
+                                                            )}
+                                                            {item.me2_restrictions && parseJSON(item.me2_restrictions)?.map((rest: string, i: number) => (
+                                                                <span key={i} className="px-2 py-0.5 bg-red-50 text-red-600 text-[10px] font-bold rounded border border-red-100 uppercase">
+                                                                    🚫 {rest}
+                                                                </span>
+                                                            ))}
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            )}
+                                        </React.Fragment>
                                     )
                                 })
                             )}

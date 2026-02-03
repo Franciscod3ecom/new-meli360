@@ -76,7 +76,8 @@ try {
                 access_token = EXCLUDED.access_token,
                 refresh_token = EXCLUDED.refresh_token,
                 expires_at = EXCLUDED.expires_at,
-                updated_at = NOW()";
+                updated_at = NOW()
+            RETURNING id";
 
     $stmt = $pdo->prepare($sql);
     $stmt->execute([
@@ -90,14 +91,11 @@ try {
     // 3. Gerenciar Vínculo de Conta e Sessão
     session_start();
 
-    // Pegar o ID da conta inserida
-    $accountId = $pdo->lastInsertId();
+    // Pegar o ID da conta inserida ou atualizada
+    $accountId = $stmt->fetchColumn();
+
     if (!$accountId) {
-        // Se já existia, pegar o ID pelo ml_user_id
-        $stmtId = $pdo->prepare("SELECT id FROM accounts WHERE ml_user_id = :ml_id");
-        $stmtId->execute([':ml_id' => $user_id]);
-        $acc = $stmtId->fetch(PDO::FETCH_ASSOC);
-        $accountId = $acc['id'];
+        die("Fatal Error: Failed to retrieve Account ID.");
     }
 
     $isNative = isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'native';

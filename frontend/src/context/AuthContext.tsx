@@ -12,6 +12,7 @@ interface User {
 }
 
 interface Account {
+    id: number | string
     ml_user_id: string
     nickname: string
     sync_status?: string

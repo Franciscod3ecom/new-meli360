@@ -172,7 +172,7 @@ try {
         ['name' => 'Porto Alegre', 'value' => (float) $regionalDataArr['porto_alegre']],
     ];
 
-    // 6. Sales Recency Distribution
+    // 6. Sales Recency Distribution (Stale items)
     $recencyDist = $pdo->prepare("
         SELECT 
             CASE 
@@ -189,7 +189,45 @@ try {
     $recencyDist->execute([':account_id' => $account_id]);
     $recencyData = $recencyDist->fetchAll(PDO::FETCH_ASSOC);
 
-    // 6. Top 5 Performers
+    // 7. Stale Items Count (> 30 days OR no sales)
+    $staleItems = $pdo->prepare("
+        SELECT COUNT(*) as count
+        FROM items 
+        WHERE account_id = :account_id 
+        AND (last_sale_date < NOW() - INTERVAL '30 days' OR last_sale_date IS NULL)
+    ");
+    $staleItems->execute([':account_id' => $account_id]);
+    $staleCount = $staleItems->fetch(PDO::FETCH_ASSOC)['count'];
+
+    // 8. Weight Analytics
+    $weightStats = $pdo->prepare("
+        SELECT 
+            COALESCE(AVG(billable_weight), 0) as avg_billable_weight,
+            COUNT(CASE WHEN weight_status ILIKE '%bom%' OR weight_status ILIKE '%baixo%' THEN 1 END) as weight_good,
+            COUNT(CASE WHEN weight_status ILIKE '%alto%' OR weight_status ILIKE '%errado%' THEN 1 END) as weight_bad
+        FROM items 
+        WHERE account_id = :account_id
+    ");
+    $weightStats->execute([':account_id' => $account_id]);
+    $wStats = $weightStats->fetch(PDO::FETCH_ASSOC);
+
+    // 9. Average Declared Weight (Parsing category_dimensions JSON)
+    $declaredWeights = $pdo->prepare("SELECT category_dimensions FROM items WHERE account_id = :account_id AND category_dimensions IS NOT NULL");
+    $declaredWeights->execute([':account_id' => $account_id]);
+    $dims = $declaredWeights->fetchAll(PDO::FETCH_ASSOC);
+
+    $totalDeclWeight = 0;
+    $declCount = 0;
+    foreach ($dims as $row) {
+        $d = json_decode($row['category_dimensions'], true);
+        if (isset($d['weight'])) {
+            $totalDeclWeight += (float) $d['weight'];
+            $declCount++;
+        }
+    }
+    $avgDeclWeight = ($declCount > 0) ? $totalDeclWeight / $declCount : 0;
+
+    // 10. Top 5 Performers
     $topItems = $pdo->prepare("
         SELECT ml_id, title, sold_quantity, price, secure_thumbnail, health, total_visits
         FROM items 
@@ -202,12 +240,21 @@ try {
 
     // Return JSON
     echo json_encode([
-        'overview' => $stats,
+        'overview' => array_merge($stats, [
+            'conversion_rate' => ($totalVisits > 0) ? ($totalSales / $totalVisits) * 100 : 0,
+            'stale_count' => (int) $staleCount,
+            'avg_billable_weight' => (float) $wStats['avg_billable_weight'],
+            'avg_declared_weight' => (float) $avgDeclWeight
+        ]),
         'health_distribution' => $healthData,
         'logistics_breakdown' => $logisticsData,
         'status_distribution' => $statusData,
         'recency_distribution' => $recencyData,
         'regional_distribution' => $regionalData,
+        'weight_analysis' => [
+            ['name' => 'Bom/Baixo', 'value' => (int) $wStats['weight_good']],
+            ['name' => 'Alto/Errado', 'value' => (int) $wStats['weight_bad']]
+        ],
         'top_performers' => $topPerformers
     ]);
 

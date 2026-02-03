@@ -13,7 +13,7 @@ import {
     CartesianGrid,
     Tooltip
 } from 'recharts'
-import { TrendingUp, Package, Heart, DollarSign, Award } from 'lucide-react'
+import { TrendingUp, Package, Heart, DollarSign, Award, AlertTriangle, Activity } from 'lucide-react'
 import { cn } from '../../../lib/utils'
 
 interface AnalyticsData {
@@ -28,11 +28,15 @@ interface AnalyticsData {
         avg_freight: number
         free_shipping_count: number
         conversion_rate: number
+        stale_count: number
+        avg_billable_weight: number
+        avg_declared_weight: number
     }
     health_distribution: Array<{ health_range: string; count: number }>
     logistics_breakdown: Array<{ logistic_category: string; count: number }>
     status_distribution: Array<{ status: string; count: number }>
     regional_distribution: Array<{ name: string; value: number }>
+    weight_analysis: Array<{ name: string; value: number }>
     top_performers: Array<{
         ml_id: string
         title: string
@@ -118,8 +122,7 @@ export default function AnalyticsDashboard() {
                 <p className="text-grey-100 mt-2">Insights do seu inventário em tempo real</p>
             </div>
 
-            {/* Stats Cards */}
-            {/* Stats Cards - Group 1: Inventory */}
+            {/* Stats Cards - Group 1: Inventory & Health */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 <StatCard
                     icon={<Package className="w-6 h-6" />}
@@ -143,14 +146,15 @@ export default function AnalyticsDashboard() {
                     color="purple"
                 />
                 <StatCard
-                    icon={<Award className="w-6 h-6" />}
-                    title="Taxa Conversão"
-                    value={`${(data.overview.conversion_rate || 0).toFixed(2)}%`}
-                    subtitle="vendas sobre visitas"
-                    color="yellow"
+                    icon={<AlertTriangle className="w-6 h-6" />}
+                    title="Sem Vender (+30d)"
+                    value={data.overview.stale_count.toString()}
+                    subtitle="anúncios parados"
+                    color="orange"
                 />
             </div>
 
+            {/* Stats Cards - Group 2: Financial & Weight */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 <StatCard
                     icon={<DollarSign className="w-6 h-6" />}
@@ -161,17 +165,17 @@ export default function AnalyticsDashboard() {
                 />
                 <StatCard
                     icon={<Package className="w-6 h-6" />}
-                    title="Frete Médio"
-                    value={formatMoney(data.overview.avg_freight || 0)}
-                    subtitle="custo nacional"
+                    title="Peso Declarado Médio"
+                    value={`${(data.overview.avg_declared_weight || 0).toFixed(0)}g`}
+                    subtitle="baseado na categoria"
                     color="cyan"
                 />
                 <StatCard
                     icon={<Package className="w-6 h-6" />}
-                    title="Frete Grátis"
-                    value={data.overview.free_shipping_count.toString()}
-                    subtitle="anúncios com frete grátis"
-                    color="orange"
+                    title="Peso Faturado Médio"
+                    value={`${(data.overview.avg_billable_weight || 0).toFixed(0)}g`}
+                    subtitle="cobrado pelo ML"
+                    color="blue"
                 />
                 <StatCard
                     icon={<Award className="w-6 h-6" />}
@@ -211,34 +215,53 @@ export default function AnalyticsDashboard() {
                     </ResponsiveContainer>
                 </div>
 
-                {/* Status Distribution */}
-                <div className="bg-white p-6 rounded-lg shadow-md border border-gray-100">
-                    <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
-                        <TrendingUp className="w-5 h-5 text-purple-500" />
-                        Status dos Anúncios
-                    </h3>
-                    <ResponsiveContainer width="100%" height={300}>
-                        <PieChart>
-                            <Pie
-                                data={data.status_distribution.map((s: { status: string; count: number }) => ({ name: s.status, value: parseInt(s.count.toString()) }))}
-                                cx="50%"
-                                cy="50%"
-                                innerRadius={60}
-                                outerRadius={100}
-                                paddingAngle={5}
-                                dataKey="value"
-                            >
-                                {data.status_distribution.map((entry: { status: string; count: number }, index: number) => (
-                                    <Cell key={`cell-${index}`} fill={entry.status === 'active' ? COLORS.excellent : entry.status === 'paused' ? COLORS.regular : COLORS.critical} />
-                                ))}
-                            </Pie>
-                            <Tooltip />
-                        </PieChart>
-                    </ResponsiveContainer>
-                    <div className="flex justify-center gap-4 mt-2 text-xs text-gray-600">
-                        <span className="flex items-center gap-1"><div className="w-3 h-3 rounded-full bg-[#10b981]" /> Ativos</span>
-                        <span className="flex items-center gap-1"><div className="w-3 h-3 rounded-full bg-[#f59e0b]" /> Pausados</span>
-                        <span className="flex items-center gap-1"><div className="w-3 h-3 rounded-full bg-[#ef4444]" /> Fechados/Outros</span>
+                {/* Status distribution & Weight Quality */}
+                <div className="grid grid-cols-1 gap-6">
+                    {/* Weight Quality Chart */}
+                    <div className="bg-white p-6 rounded-lg shadow-md border border-gray-100">
+                        <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+                            <Activity className="w-5 h-5 text-orange-500" />
+                            Qualidade do Peso (Categorias)
+                        </h3>
+                        <ResponsiveContainer width="100%" height={150}>
+                            <BarChart layout="vertical" data={data.weight_analysis}>
+                                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" horizontal={false} />
+                                <XAxis type="number" />
+                                <YAxis dataKey="name" type="category" width={80} tick={{ fontSize: 10 }} />
+                                <Tooltip />
+                                <Bar dataKey="value" radius={[0, 4, 4, 0]}>
+                                    {data.weight_analysis.map((entry: any, index: number) => (
+                                        <Cell key={`cell-${index}`} fill={entry.name.includes('Alto') ? COLORS.critical : COLORS.excellent} />
+                                    ))}
+                                </Bar>
+                            </BarChart>
+                        </ResponsiveContainer>
+                    </div>
+
+                    {/* Status pie chart */}
+                    <div className="bg-white p-6 rounded-lg shadow-md border border-gray-100">
+                        <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+                            <TrendingUp className="w-5 h-5 text-purple-500" />
+                            Status dos Anúncios
+                        </h3>
+                        <ResponsiveContainer width="100%" height={120}>
+                            <PieChart>
+                                <Pie
+                                    data={data.status_distribution.map((s: { status: string; count: number }) => ({ name: s.status, value: parseInt(s.count.toString()) }))}
+                                    cx="50%"
+                                    cy="50%"
+                                    innerRadius={30}
+                                    outerRadius={50}
+                                    paddingAngle={5}
+                                    dataKey="value"
+                                >
+                                    {data.status_distribution.map((entry: { status: string; count: number }, index: number) => (
+                                        <Cell key={`cell-${index}`} fill={entry.status === 'active' ? COLORS.excellent : entry.status === 'paused' ? COLORS.regular : COLORS.critical} />
+                                    ))}
+                                </Pie>
+                                <Tooltip />
+                            </PieChart>
+                        </ResponsiveContainer>
                     </div>
                 </div>
 

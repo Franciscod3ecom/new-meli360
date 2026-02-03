@@ -1,9 +1,12 @@
 import { useAuth } from '../../../context/AuthContext'
-import { Check, ChevronDown, LogOut, PlusCircle, UserCircle } from 'lucide-react'
+import { api } from '../../../services/api'
+import { Check, ChevronDown, LogOut, PlusCircle, UserCircle, Trash2 } from 'lucide-react'
 import { useState, useRef, useEffect } from 'react'
+import { cn } from '../../../lib/utils'
+import { toast } from 'sonner'
 
 export function AccountSwitcher() {
-    const { user, accounts, switchAccount, login, logout } = useAuth()
+    const { user, accounts, switchAccount, login, logout, checkSession } = useAuth()
     const [isOpen, setIsOpen] = useState(false)
     const dropdownRef = useRef<HTMLDivElement>(null)
 
@@ -42,23 +45,48 @@ export function AccountSwitcher() {
 
                     <div className="max-h-60 overflow-y-auto">
                         {accounts.map((account) => (
-                            <button
-                                key={account.ml_user_id}
-                                onClick={() => {
-                                    if (account.ml_user_id !== user.ml_user_id) {
-                                        switchAccount(account.ml_user_id)
-                                    }
-                                    setIsOpen(false)
-                                }}
-                                className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center justify-between"
-                            >
-                                <span className={account.ml_user_id === user.ml_user_id ? 'font-semibold' : ''}>
-                                    {account.nickname}
-                                </span>
-                                {account.ml_user_id === user.ml_user_id && (
-                                    <Check className="w-4 h-4 text-green-500" />
-                                )}
-                            </button>
+                            <div key={account.ml_user_id} className="group relative">
+                                <button
+                                    onClick={() => {
+                                        if (account.ml_user_id !== user.ml_user_id) {
+                                            switchAccount(account.ml_user_id)
+                                        }
+                                        setIsOpen(false)
+                                    }}
+                                    className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center justify-between"
+                                >
+                                    <div className="flex items-center gap-2 overflow-hidden">
+                                        <span className={cn(
+                                            "truncate",
+                                            account.ml_user_id === user.ml_user_id ? 'font-semibold' : ''
+                                        )}>
+                                            {account.nickname}
+                                        </span>
+                                        {account.ml_user_id === user.ml_user_id && (
+                                            <Check className="w-4 h-4 text-green-500 flex-shrink-0" />
+                                        )}
+                                    </div>
+                                </button>
+                                <button
+                                    onClick={async (e) => {
+                                        e.stopPropagation()
+                                        if (window.confirm(`⚠️ AVISO CRÍTICO: Tem certeza que deseja EXCLUIR permanentemente a conta ${account.nickname}? \n\nIsso apagará TODOS os dados de anúncios, fretes e histórico desta conta do nosso banco de dados. Esta ação não pode ser desfeita.`)) {
+                                            try {
+                                                await api.deleteAccount(account.id)
+                                                toast.success("Conta e dados excluídos com sucesso.")
+                                                checkSession() // Refresh accounts list
+                                            } catch (err) {
+                                                console.error(err)
+                                                toast.error("Erro ao excluir conta.")
+                                            }
+                                        }
+                                    }}
+                                    className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity"
+                                    title="Excluir conta e dados permanentemente"
+                                >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                            </div>
                         ))}
                     </div>
 

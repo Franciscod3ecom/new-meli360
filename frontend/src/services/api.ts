@@ -102,6 +102,23 @@ export const api = {
             throw error;
         }
     },
+    deleteAccount: async (accountId: string | number) => {
+        try {
+            const response = await fetch(`${BACKEND_URL}/api/delete_account.php`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ account_id: accountId })
+            });
+            const data = await response.json();
+            if (!response.ok) throw new Error(data.error || 'Delete account failed');
+            return data;
+        } catch (error) {
+            console.error('Delete account error:', error);
+            throw error;
+        }
+    },
     validateLicense: async (email: string, mlUserId: string) => {
         try {
             const response = await fetch(`${BACKEND_URL}/api/validate_license.php`, {
