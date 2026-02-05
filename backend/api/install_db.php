@@ -117,7 +117,9 @@ try {
         "ALTER TABLE items ADD COLUMN IF NOT EXISTS category_logistics TEXT",
         "ALTER TABLE items ADD COLUMN IF NOT EXISTS category_restricted BOOLEAN DEFAULT FALSE",
         "ALTER TABLE items ADD COLUMN IF NOT EXISTS category_last_modified TIMESTAMP",
-        "ALTER TABLE items ADD COLUMN IF NOT EXISTS avg_category_freight DECIMAL(10,2)"
+        "ALTER TABLE items ADD COLUMN IF NOT EXISTS avg_category_freight DECIMAL(10,2)",
+        "ALTER TABLE saas_users ADD COLUMN IF NOT EXISTS reset_token VARCHAR(64) DEFAULT NULL",
+        "ALTER TABLE saas_users ADD COLUMN IF NOT EXISTS reset_expires_at TIMESTAMP DEFAULT NULL"
     ];
 
     foreach ($updates as $sql) {

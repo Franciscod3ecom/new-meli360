@@ -7,6 +7,8 @@ import Dashboard from './features/analisador/pages/Dashboard'
 import AnalyticsDashboard from './features/analisador/pages/AnalyticsDashboard'
 import Login from './features/analisador/pages/Login'
 import Register from './features/analisador/pages/Register'
+import ForgotPassword from './features/auth/ForgotPassword'
+import ResetPassword from './features/auth/ResetPassword'
 import LicenseActivation from './features/analisador/pages/LicenseActivation'
 import { AccountSwitcher } from './features/analisador/components/AccountSwitcher'
 import { LogoutButton } from './features/analisador/components/LogoutButton'
@@ -53,6 +55,8 @@ function App() {
               <Routes>
                 <Route path="/login" element={<Login />} />
                 <Route path="/register" element={<Register />} />
+                <Route path="/forgot-password" element={<ForgotPassword />} />
+                <Route path="/reset-password" element={<ResetPassword />} />
 
                 <Route path="/*" element={
                   <ProtectedRoute>

@@ -134,6 +134,36 @@ export const api = {
             throw error;
         }
     },
+    forgotPassword: async (email: string) => {
+        try {
+            const response = await fetch(`${BACKEND_URL}/auth/forgot_password.php`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email })
+            });
+            const data = await response.json();
+            if (!response.ok) throw new Error(data.error || 'Request failed');
+            return data;
+        } catch (error) {
+            console.error('Forgot password error:', error);
+            throw error;
+        }
+    },
+    resetPassword: async (token: string, password: string) => {
+        try {
+            const response = await fetch(`${BACKEND_URL}/auth/reset_password.php`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ token, password })
+            });
+            const data = await response.json();
+            if (!response.ok) throw new Error(data.error || 'Reset failed');
+            return data;
+        } catch (error) {
+            console.error('Reset password error:', error);
+            throw error;
+        }
+    },
     checkLicense: async () => {
         try {
             const response = await fetch(`${BACKEND_URL}/api/check_license.php`);
@@ -179,6 +209,22 @@ export const api = {
             return data;
         } catch (error) {
             console.error('Login error:', error);
+            throw error;
+        }
+    },
+    changePassword: async (currentPassword: string, newPassword: string) => {
+        try {
+            const response = await fetch(`${BACKEND_URL}/auth/change_password.php`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ current_password: currentPassword, new_password: newPassword }),
+                credentials: 'include'
+            });
+            const data = await response.json();
+            if (!response.ok) throw new Error(data.error || 'Falha ao alterar senha');
+            return data;
+        } catch (error) {
+            console.error('Change password error:', error);
             throw error;
         }
     },

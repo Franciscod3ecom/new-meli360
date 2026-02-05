@@ -29,6 +29,7 @@ CREATE INDEX IF NOT EXISTS idx_items_ml_id ON items(ml_id);
 
 
 -- View to calculate days_without_sale dynamically
+DROP VIEW IF EXISTS items_view;
 CREATE OR REPLACE VIEW items_view AS
 SELECT 
     *,
@@ -42,6 +43,24 @@ CREATE TABLE IF NOT EXISTS accounts (
     nickname VARCHAR(100),
     access_token TEXT NOT NULL,
     refresh_token TEXT NOT NULL,
-    expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
+    expires_at TIMESTAMP WITH TIME ZONE, -- Made nullable for migration compatibility
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Create table users
+CREATE TABLE IF NOT EXISTS users (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    name VARCHAR(255),
+    email VARCHAR(255) UNIQUE NOT NULL,
+    password VARCHAR(255) NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Create table user_accounts (Many-to-Many link)
+CREATE TABLE IF NOT EXISTS user_accounts (
+    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    account_id UUID REFERENCES accounts(id) ON DELETE CASCADE,
+    PRIMARY KEY (user_id, account_id)
 );

@@ -47,7 +47,7 @@ if (!$email || !$password) {
 try {
     $pdo = getDatabaseConnection();
 
-    // Buscar usuário
+    // Buscar usuário na tabela correta (saas_users)
     $stmt = $pdo->prepare("SELECT id, email, password_hash FROM saas_users WHERE email = :email LIMIT 1");
     $stmt->execute([':email' => $email]);
     $user = $stmt->fetch(PDO::FETCH_ASSOC);

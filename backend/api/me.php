@@ -1,5 +1,8 @@
 <?php
 // backend/api/me.php
+error_reporting(E_ALL);
+ini_set('display_errors', 1);
+
 session_start();
 header('Content-Type: application/json');
 header('Access-Control-Allow-Origin: https://d3ecom.com.br');
@@ -7,16 +10,16 @@ header('Access-Control-Allow-Credentials: true');
 
 require_once __DIR__ . '/../config/database.php';
 
-// Check for valid session
-if (!isset($_SESSION['user_id'])) {
-    echo json_encode(['authenticated' => false]);
-    exit;
-}
-
 try {
+    // Check for valid session
+    if (!isset($_SESSION['user_id'])) {
+        echo json_encode(['authenticated' => false, 'reason' => 'no_session']);
+        exit;
+    }
+
     $pdo = getDatabaseConnection();
 
-    // Determine login type: native (users table) or OAuth (accounts table)
+    // Determine login type: native (saas_users table) or OAuth (accounts table)
     $user_type = $_SESSION['user_type'] ?? 'native';
 
     if ($user_type === 'oauth') {
@@ -26,7 +29,7 @@ try {
         $account = $stmt->fetch(PDO::FETCH_ASSOC);
 
         if (!$account) {
-            echo json_encode(['authenticated' => false]);
+            echo json_encode(['authenticated' => false, 'reason' => 'oauth_account_not_found']);
             exit;
         }
 
@@ -45,7 +48,11 @@ try {
         $user = $stmt->fetch(PDO::FETCH_ASSOC);
 
         if (!$user) {
-            echo json_encode(['authenticated' => false, 'debug' => 'User not found in saas_users']);
+            echo json_encode([
+                'authenticated' => false,
+                'reason' => 'user_not_found',
+                'debug_id' => $_SESSION['user_id']
+            ]);
             exit;
         }
 
@@ -60,59 +67,54 @@ try {
         $stmt->execute([':user_id' => $user['id']]);
         $accounts = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-        // If no accounts linked, return authenticated but with no account selected
-        if (empty($accounts)) {
-            echo json_encode([
-                'authenticated' => true,
-                'user' => [
-                    'id' => null,
-                    'email' => $user['email'],
-                    'user_id' => $user['id'],
-                    'accounts' => [],
-                    'needs_account_link' => true
-                ]
-            ]);
-            exit;
-        }
-
-        // Use the first account as default (or from session if set)
-        $selectedAccountId = $_SESSION['selected_account_id'] ?? $accounts[0]['id'];
-
-        // Find the selected account in the list
+        // Determine selected account
+        $selectedAccountId = $_SESSION['selected_account_id'] ?? ($accounts[0]['id'] ?? null);
         $selectedAccount = null;
-        foreach ($accounts as $acc) {
-            if ($acc['id'] === $selectedAccountId) {
-                $selectedAccount = $acc;
-                break;
+
+        if ($selectedAccountId) {
+            foreach ($accounts as $acc) {
+                if ($acc['id'] === $selectedAccountId) {
+                    $selectedAccount = $acc;
+                    break;
+                }
             }
         }
 
         // Fallback to first account if selected not found
-        if (!$selectedAccount) {
+        if (!$selectedAccount && !empty($accounts)) {
             $selectedAccount = $accounts[0];
         }
 
         echo json_encode([
             'authenticated' => true,
             'user' => [
-                'id' => $selectedAccount['id'], // Current account UUID for filtering
+                'id' => $selectedAccount['id'] ?? null,
                 'email' => $user['email'],
                 'user_id' => $user['id'],
-                'nickname' => $selectedAccount['nickname'],
-                'ml_user_id' => $selectedAccount['ml_user_id'],
-                'accounts' => $accounts // All accounts for switcher
+                'nickname' => $selectedAccount['nickname'] ?? null,
+                'ml_user_id' => $selectedAccount['ml_user_id'] ?? null,
+                'accounts' => $accounts,
+                'needs_account_link' => empty($accounts)
             ]
         ]);
     }
 
 } catch (Exception $e) {
-    // Log error for debugging
-    error_log("me.php ERROR: " . $e->getMessage());
-
     http_response_code(500);
     echo json_encode([
         'authenticated' => false,
-        'error' => 'Database error',
-        'details' => $e->getMessage() // REMOVE in production!
+        'error' => 'exception',
+        'message' => $e->getMessage(),
+        'file' => $e->getFile(),
+        'line' => $e->getLine()
+    ]);
+} catch (Error $e) {
+    http_response_code(500);
+    echo json_encode([
+        'authenticated' => false,
+        'error' => 'fatal_error',
+        'message' => $e->getMessage(),
+        'file' => $e->getFile(),
+        'line' => $e->getLine()
     ]);
 }
