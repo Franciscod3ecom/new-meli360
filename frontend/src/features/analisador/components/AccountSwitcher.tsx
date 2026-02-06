@@ -31,18 +31,18 @@ export function AccountSwitcher() {
         <div className="relative" ref={dropdownRef}>
             <button
                 onClick={() => setIsOpen(!isOpen)}
-                className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-yellow-500"
+                className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-neutral-700 dark:text-neutral-200 bg-white dark:bg-neutral-900 border border-neutral-300 dark:border-neutral-800 rounded-xl hover:bg-neutral-50 dark:hover:bg-neutral-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-500 transition-all shadow-sm"
             >
-                <UserCircle className="w-5 h-5 text-gray-400" />
+                <UserCircle className="w-5 h-5 text-neutral-400 dark:text-neutral-500" />
                 <span className="max-w-[120px] truncate">{user.nickname || 'Usuario'}</span>
-                <ChevronDown className="w-4 h-4 text-gray-400" />
+                <ChevronDown className="w-4 h-4 text-neutral-400" />
             </button>
 
             {isOpen && (
-                <div className="absolute right-0 mt-2 w-56 bg-white rounded-md shadow-lg py-1 ring-1 ring-black ring-opacity-5 z-50">
-                    <div className="px-4 py-2 border-b border-gray-100">
-                        <p className="text-xs text-gray-500 uppercase font-semibold">Conta Atual</p>
-                        <p className="text-sm font-medium text-gray-900 truncate">{user.nickname}</p>
+                <div className="absolute right-0 mt-2 w-56 bg-white dark:bg-black rounded-xl shadow-2xl py-2 ring-1 ring-black ring-opacity-5 dark:ring-neutral-800 z-50 border border-transparent dark:border-neutral-800 transition-all animate-scale-in">
+                    <div className="px-4 py-2 border-b border-neutral-100 dark:border-neutral-800 mb-1">
+                        <p className="text-[10px] text-neutral-500 uppercase font-bold tracking-wider">Conta Atual</p>
+                        <p className="text-sm font-semibold text-neutral-900 dark:text-neutral-50 truncate">{user.nickname}</p>
                     </div>
 
                     <div className="max-h-60 overflow-y-auto">
@@ -55,17 +55,17 @@ export function AccountSwitcher() {
                                         }
                                         setIsOpen(false)
                                     }}
-                                    className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center justify-between"
+                                    className="w-full text-left px-4 py-2.5 text-sm text-neutral-700 dark:text-neutral-300 hover:bg-neutral-50 dark:hover:bg-neutral-900 flex items-center justify-between transition-colors"
                                 >
                                     <div className="flex items-center gap-2 overflow-hidden">
                                         <span className={cn(
                                             "truncate",
-                                            account.ml_user_id === user.ml_user_id ? 'font-semibold' : ''
+                                            account.ml_user_id === user.ml_user_id ? 'font-semibold text-brand-600 dark:text-brand-400' : ''
                                         )}>
                                             {account.nickname}
                                         </span>
                                         {account.ml_user_id === user.ml_user_id && (
-                                            <Check className="w-4 h-4 text-green-500 flex-shrink-0" />
+                                            <Check className="w-4 h-4 text-brand-500 flex-shrink-0" />
                                         )}
                                     </div>
                                 </button>
@@ -92,13 +92,13 @@ export function AccountSwitcher() {
                         ))}
                     </div>
 
-                    <div className="border-t border-gray-100 pt-1">
+                    <div className="border-t border-neutral-100 dark:border-neutral-800 mt-1 pt-1">
                         <button
                             onClick={() => {
                                 login() // Trigger new OAuth flow
                                 setIsOpen(false)
                             }}
-                            className="w-full text-left px-4 py-2 text-sm text-blue-600 hover:bg-blue-50 flex items-center gap-2"
+                            className="w-full text-left px-4 py-2.5 text-sm text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/40 flex items-center gap-2 transition-colors"
                         >
                             <PlusCircle className="w-4 h-4" />
                             Adicionar Conta
@@ -109,18 +109,18 @@ export function AccountSwitcher() {
                                 setIsChangePasswordOpen(true)
                                 setIsOpen(false)
                             }}
-                            className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
+                            className="w-full text-left px-4 py-2.5 text-sm text-neutral-700 dark:text-neutral-300 hover:bg-neutral-50 dark:hover:bg-neutral-900 flex items-center gap-2 transition-colors"
                         >
-                            <Lock className="w-4 h-4 text-gray-400" />
+                            <Lock className="w-4 h-4 text-neutral-400 dark:text-neutral-500" />
                             Alterar Senha
                         </button>
 
                         <button
                             onClick={() => logout()}
-                            className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
+                            className="w-full text-left px-4 py-2.5 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/40 flex items-center gap-2 transition-colors"
                         >
                             <LogOut className="w-4 h-4" />
-                            Sair
+                            Sair do Portal
                         </button>
                     </div>
                 </div>

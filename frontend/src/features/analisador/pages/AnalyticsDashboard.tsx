@@ -189,8 +189,8 @@ export default function AnalyticsDashboard() {
             {/* Charts Section */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {/* Health Distribution */}
-                <div className="bg-white p-6 rounded-lg shadow-md border border-gray-100">
-                    <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+                <div className="bg-white dark:bg-black p-6 rounded-lg shadow-md border border-gray-100 dark:border-neutral-800">
+                    <h3 className="text-lg font-bold text-gray-900 dark:text-neutral-50 mb-4 flex items-center gap-2">
                         <Heart className="w-5 h-5 text-pink-500" />
                         Distribuição de Saúde dos Anúncios
                     </h3>
@@ -218,8 +218,8 @@ export default function AnalyticsDashboard() {
                 {/* Status distribution & Weight Quality */}
                 <div className="grid grid-cols-1 gap-6">
                     {/* Weight Quality Chart */}
-                    <div className="bg-white p-6 rounded-lg shadow-md border border-gray-100">
-                        <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+                    <div className="bg-white dark:bg-black p-6 rounded-lg shadow-md border border-gray-100 dark:border-neutral-800">
+                        <h3 className="text-lg font-bold text-gray-900 dark:text-neutral-50 mb-4 flex items-center gap-2">
                             <Activity className="w-5 h-5 text-orange-500" />
                             Qualidade do Peso (Categorias)
                         </h3>
@@ -239,8 +239,8 @@ export default function AnalyticsDashboard() {
                     </div>
 
                     {/* Status pie chart */}
-                    <div className="bg-white p-6 rounded-lg shadow-md border border-gray-100">
-                        <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+                    <div className="bg-white dark:bg-black p-6 rounded-lg shadow-md border border-gray-100 dark:border-neutral-800">
+                        <h3 className="text-lg font-bold text-gray-900 dark:text-neutral-50 mb-4 flex items-center gap-2">
                             <TrendingUp className="w-5 h-5 text-purple-500" />
                             Status dos Anúncios
                         </h3>
@@ -266,8 +266,8 @@ export default function AnalyticsDashboard() {
                 </div>
 
                 {/* Logistics Breakdown */}
-                <div className="bg-white p-6 rounded-lg shadow-md border border-gray-100">
-                    <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+                <div className="bg-white dark:bg-black p-6 rounded-lg shadow-md border border-gray-100 dark:border-neutral-800">
+                    <h3 className="text-lg font-bold text-gray-900 dark:text-neutral-50 mb-4 flex items-center gap-2">
                         <Package className="w-5 h-5 text-blue-500" />
                         Distribuição Logística
                     </h3>
@@ -293,8 +293,8 @@ export default function AnalyticsDashboard() {
                 </div>
 
                 {/* Regional Freight Chart */}
-                <div className="bg-white p-6 rounded-lg shadow-md border border-gray-100">
-                    <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+                <div className="bg-white dark:bg-black p-6 rounded-lg shadow-md border border-gray-100 dark:border-neutral-800">
+                    <h3 className="text-lg font-bold text-gray-900 dark:text-neutral-50 mb-4 flex items-center gap-2">
                         <DollarSign className="w-5 h-5 text-cyan-500" />
                         Frete Médio por Região (R$)
                     </h3>
@@ -318,8 +318,8 @@ export default function AnalyticsDashboard() {
             </div>
 
             {/* Top Performers */}
-            <div className="bg-white p-6 rounded-lg shadow-md border border-gray-100">
-                <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+            <div className="bg-white dark:bg-black p-6 rounded-lg shadow-md border border-gray-100 dark:border-neutral-800">
+                <h3 className="text-lg font-bold text-gray-900 dark:text-neutral-50 mb-4 flex items-center gap-2">
                     <Award className="w-5 h-5 text-yellow-500" />
                     Top 5 Mais Vendidos
                 </h3>
@@ -327,7 +327,7 @@ export default function AnalyticsDashboard() {
                     {data.top_performers.map((item: any, index: number) => (
                         <div
                             key={item.ml_id}
-                            className="flex items-center gap-4 p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
+                            className="flex items-center gap-4 p-3 bg-gray-50 dark:bg-neutral-900 rounded-lg hover:bg-gray-100 dark:hover:bg-neutral-800 transition-colors border border-transparent dark:border-neutral-800"
                         >
                             <div className="flex-shrink-0 w-8 h-8 bg-gradient-to-br from-yellow-400 to-orange-500 rounded-full flex items-center justify-center text-white font-bold">
                                 #{(index + 1).toString()}
@@ -335,11 +335,11 @@ export default function AnalyticsDashboard() {
                             <img
                                 src={item.secure_thumbnail || '/placeholder.png'}
                                 alt=""
-                                className="w-16 h-16 object-cover rounded-md border border-gray-200"
+                                className="w-16 h-16 object-cover rounded-md border border-gray-200 dark:border-neutral-700"
                             />
                             <div className="flex-1 min-w-0">
-                                <p className="font-semibold text-gray-900 truncate">{item.title}</p>
-                                <p className="text-sm text-gray-500">
+                                <p className="font-semibold text-gray-900 dark:text-neutral-50 truncate">{item.title}</p>
+                                <p className="text-sm text-gray-500 dark:text-neutral-400">
                                     {item.sold_quantity} vendas • {item.total_visits || 0} visitas • {formatMoney(item.price)}
                                 </p>
                             </div>
@@ -380,7 +380,7 @@ function StatCard({ icon, title, value, subtitle, color }: {
     }
 
     return (
-        <div className="bg-white rounded-lg shadow-md border border-gray-100 overflow-hidden">
+        <div className="bg-white dark:bg-black rounded-lg shadow-md border border-gray-100 dark:border-neutral-800 overflow-hidden">
             <div className={cn('bg-gradient-to-br p-4 text-white', colorClasses[color])}>
                 <div className="flex items-center justify-between">
                     <div className="bg-white/20 p-2 rounded-lg backdrop-blur-sm">

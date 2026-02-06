@@ -3,9 +3,10 @@ import React, { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '../../../services/api'
 import { useAuth } from '../../../context/AuthContext'
-import { Download, Pause, RefreshCw, LogOut, Search, ChevronRight, ChevronDown, Package, Activity, Info, AlertTriangle } from 'lucide-react'
+import { Download, Pause, RefreshCw, Search, ChevronRight, ChevronDown, Package, Activity, Info, AlertTriangle } from 'lucide-react'
 import { cn } from '../../../lib/utils'
 import { toast } from 'sonner'
+import Button from '../../../components/ui/Button'
 
 // Data Types
 interface Item {
@@ -49,7 +50,7 @@ interface Item {
 }
 
 export default function Dashboard() {
-    const { user, logout } = useAuth()
+    const { user } = useAuth()
 
     // State
     const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'paused' | 'no_stock' | 'closed'>('all')
@@ -242,64 +243,73 @@ export default function Dashboard() {
             )}
 
             {/* Main Card */}
-            <div className="bg-white shadow rounded-lg p-6">
+            {/* Main Premium Card */}
+            <div className="glass rounded-[2.5rem] p-8 shadow-2xl border-white/40 dark:border-white/5">
                 {/* Header */}
-                <div className="flex justify-between items-center mb-4">
-                    <h2 className="text-lg font-semibold">📊 Seus Anúncios ({pagination.total_items})</h2>
-                    <div className="flex items-center gap-2">
-                        <button
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-8 pb-8 border-b border-neutral-200/50 dark:border-neutral-800/50">
+                    <div>
+                        <h2 className="text-3xl font-semibold tracking-tight text-neutral-900 dark:text-neutral-50 flex items-center gap-3">
+                            <div className="w-10 h-10 bg-brand-500 rounded-2xl flex items-center justify-center shadow-lg shadow-brand-500/20">
+                                <Package className="w-5 h-5 text-neutral-900" />
+                            </div>
+                            Inventário Inteligente
+                            <span className="text-sm font-normal text-neutral-400 dark:text-neutral-500 bg-neutral-100 dark:bg-neutral-800 px-3 py-1 rounded-full border border-neutral-200 dark:border-neutral-700 ml-2">
+                                {pagination.total_items} anúncios
+                            </span>
+                        </h2>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-3">
+                        <Button
+                            variant="primary"
+                            size="sm"
                             onClick={async () => {
                                 try {
                                     toast.loading('Sincronizando...', { id: 'sync-toast' })
                                     const result = await api.triggerSync()
                                     toast.success(result.message || 'Sincronização concluída!', { id: 'sync-toast' })
-                                    refetch() // Recarregar dados
+                                    refetch()
                                 } catch (error: any) {
                                     toast.error(error.message || 'Erro na sincronização', { id: 'sync-toast' })
                                 }
                             }}
-                            className="px-3 py-1.5 text-sm font-medium text-blue-700 bg-blue-50 border border-blue-200 rounded-md hover:bg-blue-100 flex items-center gap-1"
+                            icon={<RefreshCw className="w-4 h-4" />}
                         >
-                            <RefreshCw className="w-4 h-4" />
                             Sincronizar
-                        </button>
-                        <button
+                        </Button>
+
+                        <Button
+                            variant="error"
+                            size="sm"
                             onClick={handleBulkPause}
                             disabled={selectedItems.size === 0 || isBulkPausing}
-                            className="px-3 py-1.5 text-sm font-medium text-white bg-orange-500 rounded-md hover:bg-orange-600 disabled:opacity-50 flex items-center gap-1"
+                            icon={<Pause className="w-4 h-4" />}
                         >
-                            <Pause className="w-4 h-4" />
-                            {isBulkPausing ? 'Pausando...' : 'Pausar'}
-                        </button>
-                        <button
+                            {isBulkPausing ? 'Pausando...' : `Pausar Selecionados (${selectedItems.size})`}
+                        </Button>
+
+                        <Button
+                            variant="outline"
+                            size="sm"
                             onClick={() => api.exportCSV()}
-                            className="px-3 py-1.5 text-sm font-medium border border-gray-300 rounded-md hover:bg-gray-50 flex items-center gap-1"
+                            icon={<Download className="w-4 h-4" />}
                         >
-                            <Download className="w-4 h-4" />
-                            Baixar CSV
-                        </button>
-                        <button
-                            onClick={logout}
-                            className="px-3 py-1.5 text-sm font-medium text-red-600 border border-red-200 rounded-md hover:bg-red-50 flex items-center gap-1"
-                        >
-                            <LogOut className="w-4 h-4" />
-                            Sair
-                        </button>
+                            Exportar CSV
+                        </Button>
                     </div>
                 </div>
 
-                {/* Filters */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-4 pb-4 border-b">
+                {/* Intelligent Filters */}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 mb-8">
                     {/* Status Filter */}
-                    <div>
-                        <label className="text-sm font-medium text-gray-600 mb-2 block">Filtrar por Status:</label>
+                    <div className="space-y-4">
+                        <label className="text-xs font-bold text-neutral-400 dark:text-neutral-500 uppercase tracking-widest ml-1">Filtrar por Status</label>
                         <div className="flex flex-wrap gap-2">
                             {[
                                 { key: 'all', label: 'Todos' },
                                 { key: 'active', label: 'Ativos' },
                                 { key: 'paused', label: 'Pausados' },
-                                { key: 'no_stock', label: 'Sem Estoque' },
-                                { key: 'closed', label: 'Finalizados' }
+                                { key: 'no_stock', label: 'Sem Estoque' }
                             ].map(({ key, label }) => (
                                 <button
                                     key={key}
@@ -308,10 +318,10 @@ export default function Dashboard() {
                                         setCurrentPage(1)
                                     }}
                                     className={cn(
-                                        "px-3 py-1 text-sm font-medium rounded-full border transition-colors",
+                                        "px-4 py-2 text-sm font-medium rounded-xl border transition-all duration-300 active:scale-95",
                                         statusFilter === key
-                                            ? 'bg-yellow-500 text-white border-yellow-600'
-                                            : 'bg-white text-gray-700 hover:bg-gray-50 border-gray-300'
+                                            ? 'bg-neutral-900 dark:bg-neutral-50 text-neutral-0 dark:text-neutral-950 border-neutral-900 dark:border-neutral-50 shadow-md'
+                                            : 'bg-white dark:bg-black text-neutral-500 hover:text-neutral-900 dark:hover:text-neutral-100 border-neutral-200 dark:border-neutral-800 hover:border-neutral-400 dark:hover:border-neutral-600'
                                     )}
                                 >
                                     {label}
@@ -321,43 +331,48 @@ export default function Dashboard() {
                     </div>
 
                     {/* Sales Filter */}
-                    <div>
-                        <label htmlFor="sales-filter" className="text-sm font-medium text-gray-600 mb-2 block">
-                            Filtrar por Tempo sem Venda:
+                    <div className="space-y-4">
+                        <label htmlFor="sales-filter" className="text-xs font-bold text-neutral-400 dark:text-neutral-500 uppercase tracking-widest ml-1">
+                            Análise de Performance
                         </label>
-                        <select
-                            id="sales-filter"
-                            value={salesFilter}
-                            onChange={(e) => {
-                                setSalesFilter(e.target.value as any)
-                                setCurrentPage(1)
-                            }}
-                            className="block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
-                        >
-                            <option value="all">Qualquer período</option>
-                            <option value="never_sold">Nunca Vendeu</option>
-                            <option value="over_30">Sem venda há +30 dias</option>
-                            <option value="over_60">Sem venda há +60 dias</option>
-                            <option value="over_90">Sem venda há +90 dias</option>
-                        </select>
+                        <div className="relative">
+                            <select
+                                id="sales-filter"
+                                value={salesFilter}
+                                onChange={(e) => {
+                                    setSalesFilter(e.target.value as any)
+                                    setCurrentPage(1)
+                                }}
+                                className="block w-full px-4 py-3 bg-neutral-50 dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-700 rounded-xl text-sm text-neutral-700 dark:text-neutral-200 focus:outline-none focus:ring-1 focus:ring-brand-500 appearance-none cursor-pointer"
+                            >
+                                <option value="all">Filtro de Vendas (Todos)</option>
+                                <option value="never_sold">Nunca Ventendeu</option>
+                                <option value="over_30">Parado há +30 dias</option>
+                                <option value="over_60">Parado há +60 dias</option>
+                                <option value="over_90">Parado há +90 dias</option>
+                            </select>
+                            <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-neutral-400">
+                                <ChevronDown className="w-4 h-4" />
+                            </div>
+                        </div>
                     </div>
 
                     {/* Search Bar */}
-                    <div>
-                        <label className="text-sm font-medium text-gray-600 mb-2 block">Buscar por MLB:</label>
+                    <div className="space-y-4">
+                        <label className="text-xs font-bold text-neutral-400 dark:text-neutral-500 uppercase tracking-widest ml-1">Localizar Anúncio</label>
                         <div className="relative group">
-                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-blue-500 transition-colors">
-                                <Search className="w-4 h-4" />
+                            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-neutral-400 group-focus-within:text-brand-500 transition-colors">
+                                <Search className="w-5 h-5" />
                             </span>
                             <input
                                 type="text"
-                                placeholder="Ex: MLB4107595224"
+                                placeholder="Buscar por ID ou Título..."
                                 value={searchTerm}
                                 onChange={(e) => {
                                     setSearchTerm(e.target.value.toUpperCase())
                                     setCurrentPage(1)
                                 }}
-                                className="block w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 transition-all outline-none"
+                                className="block w-full pl-12 pr-4 py-3 bg-neutral-50 dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-700 rounded-xl text-sm text-neutral-900 dark:text-neutral-50 placeholder:text-neutral-400 focus:outline-none focus:ring-1 focus:ring-brand-500 transition-all font-mono"
                             />
                         </div>
                     </div>
@@ -420,9 +435,9 @@ export default function Dashboard() {
                 </div>
 
                 {/* Table */}
-                <div className="overflow-x-auto">
-                    <table className="min-w-full divide-y divide-gray-200">
-                        <thead className="bg-gray-50">
+                <div className="overflow-x-auto rounded-2xl border border-neutral-200 dark:border-neutral-800">
+                    <table className="min-w-full divide-y divide-neutral-200 dark:divide-neutral-800">
+                        <thead className="bg-neutral-50 dark:bg-black">
                             <tr>
                                 <th className="px-4 py-3 w-12">
                                     <input
@@ -434,17 +449,17 @@ export default function Dashboard() {
                                 </th>
                                 <th className="px-4 py-3 w-8"></th>
                                 <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider">Img</th>
-                                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider">Anúncio</th>
-                                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider">Status</th>
-                                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider">Estoque</th>
-                                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider">Criação</th>
-                                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider">Visitas</th>
-                                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider">Vendas</th>
-                                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider">Última Venda</th>
-                                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider">Tag de Venda</th>
+                                <th className="px-4 py-3 text-left text-[10px] font-bold text-neutral-400 dark:text-neutral-300 uppercase tracking-widest">Anúncio</th>
+                                <th className="px-4 py-3 text-left text-[10px] font-bold text-neutral-400 dark:text-neutral-300 uppercase tracking-widest">Status</th>
+                                <th className="px-4 py-3 text-left text-[10px] font-bold text-neutral-400 dark:text-neutral-300 uppercase tracking-widest">Estoque</th>
+                                <th className="px-4 py-3 text-left text-[10px] font-bold text-neutral-400 dark:text-neutral-300 uppercase tracking-widest">Criação</th>
+                                <th className="px-4 py-3 text-left text-[10px] font-bold text-neutral-400 dark:text-neutral-300 uppercase tracking-widest">Visitas</th>
+                                <th className="px-4 py-3 text-left text-[10px] font-bold text-neutral-400 dark:text-neutral-300 uppercase tracking-widest">Vendas</th>
+                                <th className="px-4 py-3 text-left text-[10px] font-bold text-neutral-400 dark:text-neutral-300 uppercase tracking-widest">Última Venda</th>
+                                <th className="px-4 py-3 text-left text-[10px] font-bold text-neutral-400 dark:text-neutral-300 uppercase tracking-widest">Tag de Venda</th>
                             </tr>
                         </thead>
-                        <tbody className="bg-white divide-y divide-gray-200">
+                        <tbody className="bg-white dark:bg-black divide-y divide-neutral-200 dark:divide-neutral-800">
                             {processedItems.length === 0 ? (
                                 <tr>
                                     <td colSpan={10} className="text-center py-10 text-gray-500">
@@ -486,15 +501,15 @@ export default function Dashboard() {
                                                     <img
                                                         src={item.secure_thumbnail || item.thumbnail}
                                                         alt=""
-                                                        className="w-12 h-12 object-contain rounded border border-gray-100"
+                                                        className="w-12 h-12 object-contain rounded-xl border border-neutral-100 dark:border-neutral-800 bg-white"
                                                     />
                                                 </td>
                                                 <td className="px-4 py-2">
-                                                    <div className="text-sm font-medium truncate max-w-xs" title={item.title}>
+                                                    <div className="text-sm font-medium truncate max-w-xs text-neutral-900 dark:text-neutral-50" title={item.title}>
                                                         {item.title}
                                                     </div>
                                                     <div className="flex items-center gap-1.5 mt-0.5">
-                                                        <span className="text-[10px] text-gray-500 font-mono">{item.ml_id}</span>
+                                                        <span className="text-[10px] text-neutral-500 font-mono">{item.ml_id}</span>
                                                         {item.catalog_listing && (
                                                             <span className="bg-blue-600 text-white text-[8px] font-bold px-1 rounded shadow-sm">CAT</span>
                                                         )}
@@ -510,19 +525,19 @@ export default function Dashboard() {
                                                         {getStatusLabel(item.status)}
                                                     </span>
                                                 </td>
-                                                <td className="px-4 py-2 text-sm text-center font-mono">
+                                                <td className="px-4 py-2 text-sm text-neutral-700 dark:text-neutral-200">
                                                     {item.available_quantity.toLocaleString()}
                                                 </td>
-                                                <td className="px-4 py-2 text-sm">
+                                                <td className="px-4 py-2 text-sm text-neutral-600 dark:text-neutral-300">
                                                     {item.date_created ? new Date(item.date_created).toLocaleDateString('pt-BR') : '-'}
                                                 </td>
-                                                <td className="px-4 py-2 text-sm">
+                                                <td className="px-4 py-2 text-sm text-neutral-600 dark:text-neutral-300">
                                                     {item.total_visits?.toLocaleString() || '0'}
                                                 </td>
-                                                <td className="px-4 py-2 text-sm">
+                                                <td className="px-4 py-2 text-sm text-neutral-600 dark:text-neutral-300">
                                                     {item.sold_quantity.toLocaleString()}
                                                 </td>
-                                                <td className="px-4 py-2 text-sm">
+                                                <td className="px-4 py-2 text-sm text-neutral-600 dark:text-neutral-300">
                                                     {item.last_sale_date
                                                         ? new Date(item.last_sale_date).toLocaleDateString('pt-BR')
                                                         : '-'
@@ -545,12 +560,12 @@ export default function Dashboard() {
                                                         <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                                                             {/* Col 1: Dimensions & Category */}
                                                             <div>
-                                                                <h4 className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2 flex items-center gap-1">
+                                                                <h4 className="text-[10px] font-bold text-neutral-400 dark:text-neutral-500 uppercase tracking-wider mb-2 flex items-center gap-1">
                                                                     <Package className="w-3 h-3" /> Categoria e Dimensões
                                                                 </h4>
-                                                                <div className="text-sm font-semibold text-gray-700">{item.category_name || 'N/A'}</div>
+                                                                <div className="text-sm font-semibold text-neutral-700 dark:text-neutral-300">{item.category_name || 'N/A'}</div>
                                                                 {dims && typeof dims === 'object' && (dims.height || dims.width || dims.length || dims.weight) ? (
-                                                                    <div className="text-[11px] text-gray-500 mt-2 space-y-1">
+                                                                    <div className="text-[11px] text-neutral-500 dark:text-neutral-400 mt-2 space-y-1">
                                                                         <div className="flex items-center gap-1.5">
                                                                             <span className="text-blue-500">📏</span>
                                                                             <span>{dims.height}x{dims.width}x{dims.length}cm</span>
@@ -573,13 +588,13 @@ export default function Dashboard() {
                                                                 <div className="space-y-3">
                                                                     <div>
                                                                         <div className="flex justify-between items-center mb-1">
-                                                                            <span className="text-[10px] text-gray-500 font-medium uppercase">Saúde do Anúncio</span>
-                                                                            <span className="text-xs font-bold text-gray-700">{item.health ? Math.round(item.health * 100) : 0}%</span>
+                                                                            <span className="text-[10px] text-neutral-500 dark:text-neutral-400 font-medium uppercase">Saúde do Anúncio</span>
+                                                                            <span className="text-xs font-bold text-neutral-700 dark:text-neutral-200">{item.health ? Math.round(item.health * 100) : 0}%</span>
                                                                         </div>
-                                                                        <div className="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden border border-gray-200">
+                                                                        <div className="w-full h-1.5 bg-neutral-100 dark:bg-neutral-800 rounded-full overflow-hidden border border-neutral-200 dark:border-neutral-700">
                                                                             <div
                                                                                 className={cn(
-                                                                                    "h-full transition-all",
+                                                                                    "h-full transition-all shadow-[0_0_8px_rgba(34,197,94,0.4)]",
                                                                                     (item.health || 0) > 0.8 ? "bg-green-500" : (item.health || 0) > 0.5 ? "bg-yellow-500" : "bg-red-500"
                                                                                 )}
                                                                                 style={{ width: `${(item.health || 0) * 100}%` }}
@@ -614,25 +629,25 @@ export default function Dashboard() {
                                                                     <Info className="w-3 h-3" /> Fretes Regionais
                                                                 </h4>
                                                                 <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-[10px]">
-                                                                    <div className="flex justify-between border-b border-gray-100 pb-0.5">
-                                                                        <span className="text-gray-400">Brasília</span>
-                                                                        <span className="font-medium text-gray-600">{formatCurrency(item.freight_brasilia)}</span>
+                                                                    <div className="flex justify-between border-b border-neutral-100 dark:border-neutral-800 pb-0.5">
+                                                                        <span className="text-neutral-500">Brasília</span>
+                                                                        <span className="font-medium text-neutral-700">{formatCurrency(item.freight_brasilia)}</span>
                                                                     </div>
-                                                                    <div className="flex justify-between border-b border-gray-100 pb-0.5">
-                                                                        <span className="text-gray-400">São Paulo</span>
-                                                                        <span className="font-medium text-gray-600">{formatCurrency(item.freight_sao_paulo)}</span>
+                                                                    <div className="flex justify-between border-b border-neutral-100 dark:border-neutral-800 pb-0.5">
+                                                                        <span className="text-neutral-500">São Paulo</span>
+                                                                        <span className="font-medium text-neutral-700">{formatCurrency(item.freight_sao_paulo)}</span>
                                                                     </div>
-                                                                    <div className="flex justify-between border-b border-gray-100 pb-0.5">
-                                                                        <span className="text-gray-400">Salvador</span>
-                                                                        <span className="font-medium text-gray-600">{formatCurrency(item.freight_salvador)}</span>
+                                                                    <div className="flex justify-between border-b border-neutral-100 dark:border-neutral-800 pb-0.5">
+                                                                        <span className="text-neutral-500">Salvador</span>
+                                                                        <span className="font-medium text-neutral-700">{formatCurrency(item.freight_salvador)}</span>
                                                                     </div>
-                                                                    <div className="flex justify-between border-b border-gray-100 pb-0.5">
-                                                                        <span className="text-gray-400">Manaus</span>
-                                                                        <span className="font-medium text-gray-600">{formatCurrency(item.freight_manaus)}</span>
+                                                                    <div className="flex justify-between border-b border-neutral-100 dark:border-neutral-800 pb-0.5">
+                                                                        <span className="text-neutral-500">Manaus</span>
+                                                                        <span className="font-medium text-neutral-700">{formatCurrency(item.freight_manaus)}</span>
                                                                     </div>
-                                                                    <div className="flex justify-between border-b border-gray-100 pb-0.5">
-                                                                        <span className="text-gray-400">Porto Alegre</span>
-                                                                        <span className="font-medium text-gray-600">{formatCurrency(item.freight_porto_alegre)}</span>
+                                                                    <div className="flex justify-between border-b border-neutral-100 dark:border-neutral-800 pb-0.5">
+                                                                        <span className="text-neutral-500">Porto Alegre</span>
+                                                                        <span className="font-medium text-neutral-700">{formatCurrency(item.freight_porto_alegre)}</span>
                                                                     </div>
                                                                 </div>
                                                             </div>

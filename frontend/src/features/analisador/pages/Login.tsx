@@ -1,15 +1,17 @@
 import { useEffect, useState } from 'react'
 import { useSearchParams, useNavigate, Link } from 'react-router-dom'
 import { useAuth } from '../../../context/AuthContext'
-import { LayoutDashboard, ShoppingBag, ArrowRight, UserPlus, Loader2, LogIn } from 'lucide-react'
+import { LayoutDashboard, ShoppingBag, ArrowRight, UserPlus, LogIn } from 'lucide-react'
 import { toast } from 'sonner'
 import { api } from '../../../services/api'
+import Button from '../../../components/ui/Button'
 
 export default function Login() {
     const { login, isAuthenticated, checkSession } = useAuth()
     const [searchParams] = useSearchParams()
     const navigate = useNavigate()
     const [isLoading, setIsLoading] = useState(false)
+    const [loginError, setLoginError] = useState<string | null>(null)
     const [formData, setFormData] = useState({
         email: '',
         password: ''
@@ -33,11 +35,11 @@ export default function Login() {
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }))
+        if (loginError) setLoginError(null)
     }
 
     const handleNativeLogin = async (e: React.FormEvent) => {
         e.preventDefault()
-        console.log('🔵 Login iniciado')
 
         if (!formData.email || !formData.password) {
             toast.error('Preencha email e senha.')
@@ -45,119 +47,150 @@ export default function Login() {
         }
 
         setIsLoading(true)
+        setLoginError(null)
         try {
-            console.log('🔵 Chamando api.loginNative...')
-            const result = await api.loginNative(formData.email, formData.password)
-            console.log('✅ Login sucesso:', result)
-
-            toast.success('Login realizado com sucesso!')
-
-            console.log('🔵 Chamando checkSession...')
+            await api.loginNative(formData.email, formData.password)
+            toast.success('Bem-vindo de volta!', {
+                description: 'Acessando seu painel analítico...'
+            })
             await checkSession()
-            console.log('✅ checkSession completo')
-
-            console.log('🔵 Navegando para /inventory...')
             navigate('/inventory', { replace: true })
         } catch (error: any) {
-            console.error('❌ Erro no login:', error)
-            toast.error(error.message || 'Falha no login. Verifique suas credenciais.')
+            console.error('Login error:', error)
+            setLoginError('Usuário ou senha incorretos. Tente novamente.')
+            toast.error('Acesso Negado', {
+                description: 'E-mail ou senha incorretos. Verifique os dados e tente novamente.',
+                duration: 5000,
+            })
+            // Temporary vibration effect for UI feedback
+            const container = document.getElementById('login-card')
+            if (container) {
+                container.classList.add('animate-shake')
+                setTimeout(() => container.classList.remove('animate-shake'), 500)
+            }
         } finally {
             setIsLoading(false)
         }
     }
 
     return (
-        <div className="min-h-screen w-full bg-white flex flex-col justify-center py-12 sm:px-6 lg:px-8 relative overflow-hidden">
-            {/* Decorative Background Elements */}
+        <div className="min-h-screen w-full bg-neutral-0 dark:bg-neutral-950 flex flex-col justify-center py-12 px-4 sm:px-6 lg:px-8 relative overflow-hidden transition-colors">
+            {/* Liquid Glass Background Elements */}
             <div className="absolute top-0 left-0 w-full h-full overflow-hidden z-0 pointer-events-none">
-                <div className="absolute top-0 left-1/4 w-96 h-96 bg-gray-100 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-blob"></div>
-                <div className="absolute top-0 right-1/4 w-96 h-96 bg-gray-50 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-blob animation-delay-2000"></div>
+                <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-brand-200/20 dark:bg-brand-900/10 rounded-full blur-[120px] animate-pulse"></div>
+                <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-accent-200/20 dark:bg-accent-900/10 rounded-full blur-[120px] animation-delay-2000"></div>
             </div>
 
-            <div className="sm:mx-auto sm:w-full sm:max-w-md relative z-10">
-                <div className="flex justify-center mb-6">
-                    <div className="w-16 h-16 bg-gradient-to-br from-yellow-400 to-yellow-600 rounded-2xl shadow-lg flex items-center justify-center transform rotate-12 transition-transform hover:rotate-0">
-                        <LayoutDashboard className="w-8 h-8 text-white" />
+            <main className="sm:mx-auto sm:w-full sm:max-w-md relative z-10 animate-fade-in">
+                <div className="flex justify-center mb-8">
+                    <div className="w-20 h-20 bg-brand-500 rounded-3xl shadow-xl dark:shadow-brand-900/20 flex items-center justify-center transform hover:scale-105 transition-all duration-300">
+                        <LayoutDashboard className="w-10 h-10 text-neutral-900" />
                     </div>
                 </div>
 
-                <h2 className="mt-2 text-center text-3xl font-extrabold text-gray-900 tracking-tight">
-                    Meli360 <span className="font-light text-gray-400">Analisador</span>
-                </h2>
-                <p className="mt-2 text-center text-sm text-gray-600">
-                    Gerencie seu inventário do Mercado Livre com inteligência.
-                </p>
-            </div>
+                <div className="text-center mb-10">
+                    <h2 className="text-4xl font-semibold tracking-tight text-neutral-900 dark:text-neutral-50 mb-2">
+                        Meli360 <span className="font-light text-neutral-400">Analisador</span>
+                    </h2>
+                    <p className="text-lg text-neutral-600 dark:text-neutral-400">
+                        A inteligência que seu inventário precisa.
+                    </p>
+                </div>
 
-            <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md relative z-10">
-                <div className="bg-white py-8 px-4 shadow-xl sm:rounded-lg sm:px-10 border border-gray-100">
+                <div id="login-card" className="glass rounded-3xl p-8 sm:p-10 shadow-2xl transition-transform">
+                    <form className="space-y-5" onSubmit={handleNativeLogin}>
+                        <div className="space-y-2">
+                            <label htmlFor="email" className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 ml-1">
+                                E-mail de Acesso
+                            </label>
+                            <input
+                                id="email"
+                                name="email"
+                                type="email"
+                                autoComplete="email"
+                                required
+                                value={formData.email}
+                                onChange={handleChange}
+                                placeholder="exemplo@email.com"
+                                className="w-full px-4 py-3 bg-neutral-50 dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-700 rounded-xl text-neutral-900 dark:text-neutral-50 placeholder:text-neutral-400 focus:outline-none focus:border-brand-500 dark:focus:border-brand-400 focus:ring-1 focus:ring-brand-500 transition-all"
+                            />
+                        </div>
 
-                    {/* Native Login Form */}
-                    <form className="space-y-6" onSubmit={handleNativeLogin}>
-                        <div>
-                            <label htmlFor="email" className="block text-sm font-medium text-gray-700">E-mail</label>
-                            <div className="mt-1">
-                                <input id="email" name="email" type="email" autoComplete="email" required value={formData.email} onChange={handleChange} className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm" />
+                        <div className="space-y-2">
+                            <div className="flex items-center justify-between ml-1">
+                                <label htmlFor="password" className="block text-sm font-medium text-neutral-700 dark:text-neutral-300">
+                                    Sua Senha
+                                </label>
+                                <Link to="/forgot-password" virtual-link="true" className="text-xs font-medium text-brand-600 dark:text-brand-400 hover:text-brand-700 transition-colors">
+                                    Esqueceu a senha?
+                                </Link>
                             </div>
+                            <input
+                                id="password"
+                                name="password"
+                                type="password"
+                                autoComplete="current-password"
+                                required
+                                value={formData.password}
+                                onChange={handleChange}
+                                placeholder="••••••••"
+                                className="w-full px-4 py-3 bg-neutral-50 dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-700 rounded-xl text-neutral-900 dark:text-neutral-50 placeholder:text-neutral-400 focus:outline-none focus:border-brand-500 dark:focus:border-brand-400 focus:ring-1 focus:ring-brand-500 transition-all"
+                            />
                         </div>
 
-                        <div>
-                            <label htmlFor="password" className="block text-sm font-medium text-gray-700">Senha</label>
-                            <div className="mt-1">
-                                <input id="password" name="password" type="password" autoComplete="current-password" required value={formData.password} onChange={handleChange} className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm" />
-                            </div>
-                        </div>
+                        <Button
+                            type="submit"
+                            isLoading={isLoading}
+                            className="w-full mt-4"
+                            icon={<LogIn className="w-5 h-5" />}
+                        >
+                            Logar no Analisador
+                        </Button>
 
-                        <div className="flex items-center justify-end">
-                            <Link to="/forgot-password" className="text-sm font-medium text-blue-600 hover:text-blue-500">
-                                Esqueci minha senha
-                            </Link>
-                        </div>
-
-                        <div>
-                            <button type="submit" disabled={isLoading} className="w-full flex justify-center items-center gap-2 py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-yellow-600 hover:bg-yellow-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-yellow-500 disabled:opacity-50 transition-all">
-                                {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <LogIn className="w-4 h-4" />}
-                                Entrar
-                            </button>
-                        </div>
+                        {loginError && (
+                            <p className="mt-3 text-center text-sm font-semibold text-red-500 animate-fade-in flex items-center justify-center gap-2">
+                                <span className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.8)]" />
+                                {loginError}
+                            </p>
+                        )}
                     </form>
 
-                    <div className="mt-6">
-                        <div className="relative">
-                            <div className="absolute inset-0 flex items-center">
-                                <div className="w-full border-t border-gray-200" />
-                            </div>
-                            <div className="relative flex justify-center text-sm">
-                                <span className="px-2 bg-white text-gray-500">Ou continuar com</span>
-                            </div>
+                    <div className="mt-8 relative">
+                        <div className="absolute inset-0 flex items-center">
+                            <div className="w-full border-t border-neutral-200 dark:border-neutral-800" />
                         </div>
-
-                        <div className="mt-6">
-                            <button
-                                onClick={login}
-                                className="w-full flex justify-center items-center gap-3 py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-[#2D3277] hover:bg-[#232766] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all transform hover:-translate-y-0.5"
-                            >
-                                <div className="w-6 h-6 bg-white rounded-full flex items-center justify-center">
-                                    <ShoppingBag className="w-3 h-3 text-[#2D3277]" />
-                                </div>
-                                Mercado Livre (OAuth)
-                                <ArrowRight className="w-4 h-4 opacity-70" />
-                            </button>
+                        <div className="relative flex justify-center text-xs uppercase tracking-widest text-neutral-400">
+                            <span className="px-4 bg-transparent backdrop-blur-md">ou acesso rápido</span>
                         </div>
                     </div>
 
-                    <div className="mt-6">
-                        <Link
-                            to="/register"
-                            className="w-full flex justify-center items-center gap-2 py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all"
+                    <div className="mt-8 grid gap-4">
+                        <Button
+                            variant="secondary"
+                            onClick={login}
+                            className="w-full"
+                            icon={
+                                <div className="w-6 h-6 bg-white dark:bg-neutral-900 rounded-lg flex items-center justify-center">
+                                    <ShoppingBag className="w-3.5 h-3.5 text-neutral-900 dark:text-neutral-50" />
+                                </div>
+                            }
                         >
-                            <UserPlus className="w-4 h-4 text-gray-500" />
-                            Criar Nova Conta
+                            Conectar Mercado Livre
+                            <ArrowRight className="w-4 h-4 ml-1 opacity-50" />
+                        </Button>
+
+                        <Link to="/register" virtual-link="true" className="w-full">
+                            <Button variant="ghost" className="w-full" icon={<UserPlus className="w-5 h-5" />}>
+                                Criar Conta Gratuita
+                            </Button>
                         </Link>
                     </div>
-
                 </div>
-            </div>
+
+                <footer className="mt-12 text-center text-sm text-neutral-500 dark:text-neutral-400">
+                    <p>© 2026 Meli360. Todos os direitos reservados.</p>
+                </footer>
+            </main>
         </div>
     )
 }

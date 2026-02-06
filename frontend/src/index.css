@@ -4,66 +4,122 @@
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
-    --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
-    --primary: 222.2 47.4% 11.2%;
-    --primary-foreground: 210 40% 98%;
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 222.2 84% 4.9%;
-    --radius: 0.5rem;
-    --chart-1: 12 76% 61%;
-    --chart-2: 173 58% 39%;
-    --chart-3: 197 37% 24%;
-    --chart-4: 43 74% 66%;
-    --chart-5: 27 87% 67%;
+    --background: #FFFFFF;
+    --foreground: #212121;
+    --card: #FFFFFF;
+    --card-foreground: #212121;
+    --popover: #FFFFFF;
+    --popover-foreground: #212121;
+    --primary: #FFC107;
+    --primary-foreground: #212121;
+    --secondary: #FAFAFA;
+    --secondary-foreground: #212121;
+    --muted: #F5F5F5;
+    --muted-foreground: #757575;
+    --accent: #FF9800;
+    --accent-foreground: #212121;
+    --destructive: #F44336;
+    --destructive-foreground: #FFFFFF;
+    --border: #EEEEEE;
+    --input: #EEEEEE;
+    --ring: #FFC107;
+    --radius: 0.75rem;
   }
 
   .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
-    --primary: 210 40% 98%;
-    --primary-foreground: 222.2 47.4% 11.2%;
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 212.7 26.8% 83.9%;
-    --chart-1: 220 70% 50%;
-    --chart-2: 160 60% 45%;
-    --chart-3: 30 80% 55%;
-    --chart-4: 280 65% 60%;
-    --chart-5: 340 75% 55%;
+    --background: #000000;
+    --foreground: #FAFAFA;
+    --card: #000000;
+    --card-foreground: #FAFAFA;
+    --popover: #000000;
+    --popover-foreground: #FAFAFA;
+    --primary: #FFD21E;
+    --primary-foreground: #121212;
+    --secondary: #1C1C1E;
+    --secondary-foreground: #FAFAFA;
+    --muted: #1C1C1E;
+    --muted-foreground: #A1A1AA;
+    --accent: #FF8F00;
+    --accent-foreground: #121212;
+    --destructive: #FF453A;
+    --destructive-foreground: #FAFAFA;
+    --border: #1C1C1E;
+    --input: #1C1C1E;
+    --ring: #FFD21E;
   }
 }
 
 @layer base {
   * {
-    @apply border-border;
+    @apply border-neutral-200 dark:border-neutral-800;
   }
+
   body {
-    @apply bg-background text-foreground;
+    @apply bg-neutral-0 dark:bg-neutral-950 text-neutral-900 dark:text-neutral-50 antialiased transition-colors font-sans;
   }
+}
+
+@layer utilities {
+  .glass {
+    @apply bg-white/70 dark:bg-black/70 backdrop-blur-lg border border-white/30 dark:border-white/5 shadow-lg shadow-black/5;
+  }
+
+  .glass-nav {
+    @apply bg-neutral-0/90 dark:bg-black/90 backdrop-blur-xl border-b border-neutral-100 dark:border-neutral-900 transition-colors;
+  }
+}
+
+/* Global Table & Background Overrides for Dark Mode */
+.dark table,
+.dark thead,
+.dark tbody,
+.dark tr,
+.dark th,
+.dark td {
+  background-color: transparent !important;
+}
+
+.dark .bg-white,
+.dark .bg-gray-50,
+.dark .bg-neutral-50,
+.dark .bg-neutral-50\/50,
+.dark .bg-gray-50\/50 {
+  background-color: #000000 !important;
+}
+
+.dark .divide-gray-200,
+.dark .divide-neutral-200 {
+  border-color: #1C1C1E !important;
+}
+
+.dark .border-gray-100,
+.dark .border-gray-200,
+.dark .border-neutral-100,
+.dark .border-neutral-200 {
+  border-color: #1C1C1E !important;
+}
+
+/* Dark Mode Text Contrast Overrides */
+.dark .text-neutral-500,
+.dark .text-gray-500 {
+  color: #A1A1AA !important;
+  /* Lighter gray for better contrast */
+}
+
+.dark .text-neutral-400,
+.dark .text-gray-400 {
+  color: #71717A !important;
+  /* Slightly darker than 500 but still legible */
+}
+
+.dark .text-neutral-600,
+.dark .text-gray-600 {
+  color: #D4D4D8 !important;
+  /* Even lighter for headings/subtext */
+}
+
+.dark .text-neutral-700,
+.dark .text-gray-700 {
+  color: #E4E4E7 !important;
+  /* Very close to secondary text white */
 }
