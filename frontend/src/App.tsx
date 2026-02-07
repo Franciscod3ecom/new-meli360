@@ -121,7 +121,7 @@ function AppLayout() {
         <header className="pb-6 border-b border-neutral-100 dark:border-neutral-900">
           <div className="flex items-center justify-between mb-6">
             <h1 className="text-3xl font-semibold tracking-tight text-neutral-900 dark:text-neutral-50">
-              Meli360 <span className="text-neutral-400 font-light ml-1">Portal</span>
+              Meli360 <span className="text-neutral-400 font-light ml-1">Analisador</span>
             </h1>
             <div className="flex items-center gap-3">
               <button

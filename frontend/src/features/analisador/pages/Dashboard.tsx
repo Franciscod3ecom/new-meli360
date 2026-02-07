@@ -253,7 +253,7 @@ export default function Dashboard() {
                                 <Package className="w-5 h-5 text-neutral-900" />
                             </div>
                             Inventário Inteligente
-                            <span className="text-sm font-normal text-neutral-400 dark:text-neutral-500 bg-neutral-100 dark:bg-neutral-800 px-3 py-1 rounded-full border border-neutral-200 dark:border-neutral-700 ml-2">
+                            <span className="text-sm font-normal text-neutral-400 dark:text-white bg-neutral-100 dark:bg-neutral-500 px-3 py-1 rounded-full border border-neutral-200 dark:border-neutral-700 ml-2">
                                 {pagination.total_items} anúncios
                             </span>
                         </h2>
@@ -381,7 +381,7 @@ export default function Dashboard() {
                 {/* Pagination Controls */}
                 <div className="flex justify-between items-center mb-4">
                     <div className="flex items-center gap-2 text-sm">
-                        <span>Exibir</span>
+                        <span className="dark:text-white">Exibir</span>
                         <select
                             value={itemsPerPage}
                             onChange={(e) => {
@@ -394,7 +394,7 @@ export default function Dashboard() {
                             <option value={200}>200</option>
                             <option value={500}>500</option>
                         </select>
-                        <span>por página</span>
+                        <span className="dark:text-white">por página</span>
                     </div>
 
                     {pagination.total_pages > 1 && (
@@ -402,31 +402,31 @@ export default function Dashboard() {
                             <button
                                 onClick={() => setCurrentPage(1)}
                                 disabled={currentPage === 1}
-                                className="px-2 py-1 rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                                className="px-2 py-1 rounded bg-neutral-100 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 hover:bg-white dark:hover:bg-neutral-700 text-neutral-700 dark:text-neutral-200 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                             >
                                 «
                             </button>
                             <button
                                 onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
                                 disabled={currentPage === 1}
-                                className="px-2 py-1 rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                                className="px-2 py-1 rounded bg-neutral-100 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 hover:bg-white dark:hover:bg-neutral-700 text-neutral-700 dark:text-neutral-200 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                             >
                                 ‹
                             </button>
-                            <span className="px-3 py-1">
+                            <span className="px-3 py-1 dark:text-white font-medium">
                                 Página {currentPage} de {pagination.total_pages}
                             </span>
                             <button
                                 onClick={() => setCurrentPage(Math.min(pagination.total_pages, currentPage + 1))}
                                 disabled={currentPage >= pagination.total_pages}
-                                className="px-2 py-1 rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                                className="px-2 py-1 rounded bg-neutral-100 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 hover:bg-white dark:hover:bg-neutral-700 text-neutral-700 dark:text-neutral-200 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                             >
                                 ›
                             </button>
                             <button
                                 onClick={() => setCurrentPage(pagination.total_pages)}
                                 disabled={currentPage >= pagination.total_pages}
-                                className="px-2 py-1 rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                                className="px-2 py-1 rounded bg-neutral-100 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 hover:bg-white dark:hover:bg-neutral-700 text-neutral-700 dark:text-neutral-200 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                             >
                                 »
                             </button>
@@ -448,15 +448,15 @@ export default function Dashboard() {
                                     />
                                 </th>
                                 <th className="px-4 py-3 w-8"></th>
-                                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider">Img</th>
-                                <th className="px-4 py-3 text-left text-[10px] font-bold text-neutral-400 dark:text-neutral-300 uppercase tracking-widest">Anúncio</th>
+                                <th className="px-4 py-3 text-left text-xs font-medium uppercase dark:text-neutral-300 tracking-wider">Img</th>
+                                <th className="px-4 py-3 text-left text-[10px] font-bold text-neutral-400 dark:text-neutral-300 uppercase tracking-widest min-w-[300px] max-w-[400px]">Anúncio</th>
                                 <th className="px-4 py-3 text-left text-[10px] font-bold text-neutral-400 dark:text-neutral-300 uppercase tracking-widest">Status</th>
                                 <th className="px-4 py-3 text-left text-[10px] font-bold text-neutral-400 dark:text-neutral-300 uppercase tracking-widest">Estoque</th>
                                 <th className="px-4 py-3 text-left text-[10px] font-bold text-neutral-400 dark:text-neutral-300 uppercase tracking-widest">Criação</th>
                                 <th className="px-4 py-3 text-left text-[10px] font-bold text-neutral-400 dark:text-neutral-300 uppercase tracking-widest">Visitas</th>
                                 <th className="px-4 py-3 text-left text-[10px] font-bold text-neutral-400 dark:text-neutral-300 uppercase tracking-widest">Vendas</th>
                                 <th className="px-4 py-3 text-left text-[10px] font-bold text-neutral-400 dark:text-neutral-300 uppercase tracking-widest">Última Venda</th>
-                                <th className="px-4 py-3 text-left text-[10px] font-bold text-neutral-400 dark:text-neutral-300 uppercase tracking-widest">Tag de Venda</th>
+                                <th className="px-4 py-3 text-left text-[10px] font-bold text-neutral-400 dark:text-neutral-300 uppercase tracking-widest min-w-[140px]">Tag de Venda</th>
                             </tr>
                         </thead>
                         <tbody className="bg-white dark:bg-black divide-y divide-neutral-200 dark:divide-neutral-800">
@@ -659,7 +659,7 @@ export default function Dashboard() {
                                                             <span className="px-2 py-0.5 bg-blue-50 text-blue-700 text-[10px] font-bold rounded border border-blue-100 uppercase">
                                                                 {getLogisticTypeLabel(item.logistic_type)}
                                                             </span>
-                                                            <span className="px-2 py-0.5 bg-gray-100 text-gray-600 text-[10px] font-bold rounded border border-gray-200 uppercase">
+                                                            <span className="px-2 py-0.5 bg-orange-100 text-orange-500 text-[10px] font-bold rounded border border-gray-200 uppercase">
                                                                 {getShippingModeLabel(item.shipping_mode)}
                                                             </span>
                                                             {item.free_shipping && (

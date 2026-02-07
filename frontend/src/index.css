@@ -99,27 +99,65 @@
   border-color: #1C1C1E !important;
 }
 
-/* Dark Mode Text Contrast Overrides */
-.dark .text-neutral-500,
-.dark .text-gray-500 {
-  color: #A1A1AA !important;
-  /* Lighter gray for better contrast */
-}
-
-.dark .text-neutral-400,
-.dark .text-gray-400 {
-  color: #71717A !important;
-  /* Slightly darker than 500 but still legible */
+/* Dark Mode Text Contrast Overrides - Forced high-contrast paper white */
+.dark .text-neutral-900,
+.dark .text-gray-900,
+.dark .text-neutral-800,
+.dark .text-gray-800,
+.dark .text-neutral-700,
+.dark .text-gray-700 {
+  color: #FAFAFA !important;
+  /* Paper White */
 }
 
 .dark .text-neutral-600,
-.dark .text-gray-600 {
-  color: #D4D4D8 !important;
-  /* Even lighter for headings/subtext */
+.dark .text-gray-600,
+.dark .text-neutral-500,
+.dark .text-gray-500 {
+  color: #E4E4E7 !important;
+  /* Very Light Gray */
 }
 
-.dark .text-neutral-700,
-.dark .text-gray-700 {
-  color: #E4E4E7 !important;
-  /* Very close to secondary text white */
+.dark .text-neutral-400,
+.dark .text-gray-400,
+.dark .text-neutral-300,
+.dark .text-gray-300 {
+  color: #D4D4D8 !important;
+  /* Light Gray */
+}
+
+/* Force headings and titles */
+.dark h1,
+.dark h2,
+.dark h3,
+.dark h4,
+.dark h5,
+.dark h6 {
+  color: #FFFFFF !important;
+}
+
+/* Recharts Dark Mode Whitening */
+.dark .recharts-cartesian-axis-tick-value,
+.dark .recharts-text.recharts-cartesian-axis-tick-value,
+.dark .recharts-text.recharts-label {
+  fill: #E4E4E7 !important;
+}
+
+.dark .recharts-legend-item-text,
+.dark .recharts-label-list text,
+.dark .recharts-pie-label-text,
+.dark .recharts-text {
+  fill: #FFFFFF !important;
+  color: #FFFFFF !important;
+}
+
+.dark .recharts-cartesian-grid-horizontal line,
+.dark .recharts-cartesian-grid-vertical line {
+  stroke: #27272A !important;
+}
+
+.dark .recharts-default-tooltip {
+  background-color: #000000 !important;
+  border: 1px solid #27272A !important;
+  color: #FAFAFA !important;
 }
