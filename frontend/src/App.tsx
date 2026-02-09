@@ -68,28 +68,35 @@ function ProtectedRoute({ children }: { children: ReactNode }) {
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <LicenseProvider>
-        <LicenseGate>
-          <AuthProvider>
-            <ThemeProvider>
-              <BrowserRouter basename={import.meta.env.PROD ? '/meli360' : '/'}>
-                <Routes>
-                  <Route path="/login" element={<Login />} />
-                  <Route path="/register" element={<Register />} />
-                  <Route path="/forgot-password" element={<ForgotPassword />} />
-                  <Route path="/reset-password" element={<ResetPassword />} />
+      <ThemeProvider>
+        <BrowserRouter basename={import.meta.env.PROD ? '/meli360' : '/'}>
+          <Routes>
+            {/* Rotas públicas - fora do LicenseGate */}
+            <Route path="/forgot-password" element={<ForgotPassword />} />
+            <Route path="/reset-password" element={<ResetPassword />} />
 
-                  <Route path="/*" element={
-                    <ProtectedRoute>
-                      <AppLayout />
-                    </ProtectedRoute>
-                  } />
-                </Routes>
-              </BrowserRouter>
-            </ThemeProvider>
-          </AuthProvider>
-        </LicenseGate>
-      </LicenseProvider>
+            {/* Rotas protegidas por licença */}
+            <Route path="/*" element={
+              <LicenseProvider>
+                <LicenseGate>
+                  <AuthProvider>
+                    <Routes>
+                      <Route path="/login" element={<Login />} />
+                      <Route path="/register" element={<Register />} />
+
+                      <Route path="/*" element={
+                        <ProtectedRoute>
+                          <AppLayout />
+                        </ProtectedRoute>
+                      } />
+                    </Routes>
+                  </AuthProvider>
+                </LicenseGate>
+              </LicenseProvider>
+            } />
+          </Routes>
+        </BrowserRouter>
+      </ThemeProvider>
     </QueryClientProvider>
   )
 }

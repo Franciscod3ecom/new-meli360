@@ -93,7 +93,7 @@ function sendResetEmail(string $to, string $resetLink, string $apiKey): bool {
     </html>';
 
     $payload = json_encode([
-        'from' => 'Meli360 <noreply@d3ecom.com.br>',
+        'from' => 'Meli360 <noreply@meliai.d3ecom.com.br>',
         'to' => [$to],
         'subject' => 'Redefinição de Senha - Meli360',
         'html' => $htmlBody
