@@ -15,6 +15,8 @@ try {
         email VARCHAR(255) UNIQUE NOT NULL,
         password_hash VARCHAR(255) NOT NULL,
         is_super_admin BOOLEAN DEFAULT FALSE,
+        reset_token VARCHAR(255) DEFAULT NULL,
+        reset_expires_at TIMESTAMP WITH TIME ZONE DEFAULT NULL,
         created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
         updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
     );
