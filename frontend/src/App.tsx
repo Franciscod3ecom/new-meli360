@@ -95,6 +95,7 @@ function App() {
               </LicenseProvider>
             } />
           </Routes>
+          <Toaster position="bottom-right" richColors />
         </BrowserRouter>
       </ThemeProvider>
     </QueryClientProvider>
@@ -159,7 +160,6 @@ function AppLayout() {
         </main>
       </div>
       <SyncStatus />
-      <Toaster position="bottom-right" richColors />
     </div>
   )
 }
