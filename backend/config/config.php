@@ -16,5 +16,8 @@ return [
     'MELI_REDIRECT_URI' => 'https://d3ecom.com.br/meli360/backend/auth/callback.php',
 
     // Frontend URL (para redirecionamento após login)
-    'FRONTEND_URL' => 'https://d3ecom.com.br/meli360'
+    'FRONTEND_URL' => 'https://d3ecom.com.br/meli360',
+
+    // Resend (Email)
+    'RESEND_API_KEY' => 're_DP2D4frS_NYkSu76tmroUDhkJYXkDfiyz'
 ];
